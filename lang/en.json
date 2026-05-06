@@ -1,0 +1,10 @@
+{
+  "GMHUB.Settings.BaseUrl.Name": "GMhub Base URL",
+  "GMHUB.Settings.BaseUrl.Hint": "Root URL of your GMhub web app, e.g. https://gmhub.example.com",
+  "GMHUB.Settings.ApiKey.Name": "GMhub API Key",
+  "GMHUB.Settings.ApiKey.Hint": "Bearer token used to authenticate against the GMhub REST API.",
+  "GMHUB.Settings.AutoPush.Name": "Auto-push journal updates",
+  "GMHUB.Settings.AutoPush.Hint": "When enabled, any journal edited in Foundry is pushed to GMhub immediately.",
+  "GMHUB.Context.PushOne": "Push to GMhub",
+  "GMHUB.Notify.Pushed": "Pushed \"{name}\" to GMhub"
+}

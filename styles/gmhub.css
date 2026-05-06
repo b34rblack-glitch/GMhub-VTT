@@ -1,0 +1,49 @@
+.gmhub-sync-button {
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.gmhub-sync .gmhub-info {
+  border: 1px solid var(--color-border-light-tertiary);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.gmhub-sync .gmhub-info p {
+  margin: 2px 0;
+}
+
+.gmhub-sync .gmhub-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.gmhub-sync .gmhub-status {
+  background: rgba(0, 0, 0, 0.05);
+  border-left: 3px solid var(--color-border-highlight);
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  font-style: italic;
+}
+
+.gmhub-sync .gmhub-result h3 {
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.gmhub-sync .gmhub-result ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.gmhub-sync details {
+  margin-top: 6px;
+}
+
+.gmhub-sync details summary {
+  cursor: pointer;
+}
