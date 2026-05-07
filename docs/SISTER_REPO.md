@@ -3,6 +3,7 @@
 > The web application this Foundry module syncs with.
 > Repo: https://github.com/b34rblack-glitch/DMhub-app
 > Tracked there as **Epic G — Foundry VTT Module** (currently planned).
+> Owns the `/api/v1` REST surface this module consumes (planned as **Epic E**).
 
 ---
 
@@ -11,7 +12,7 @@
 `dmhub-app` is the GMhub web application — a TTRPG campaign-management product running at https://gmhub.app. It hosts:
 
 - The Postgres-backed canonical store of campaigns, sessions, entities, notes.
-- The `/api/v1` REST surface this module talks to.
+- The `/api/v1` REST surface this module consumes.
 - The bearer-token issuance UI used for module configuration (planned — Epic E).
 
 For its full vision and shipped-feature log, see that repo's `README.md` and `docs/EPICS.md`.
@@ -20,18 +21,12 @@ For its full vision and shipped-feature log, see that repo's `README.md` and `do
 
 ## Cross-repo contract
 
-The two projects are coupled through one thing only: the `/api/v1` REST surface.
+The two projects are coupled through one thing only: the `/api/v1` REST surface, **owned by `dmhub-app`** under Epic E.
 
-### Endpoints (this repo's `README.md` is the authoritative shape)
+### Ownership
 
-```
-GET    /api/v1/ping
-GET    /api/v1/journals[?updatedSince=<ISO>]
-GET    /api/v1/journals/:id
-POST   /api/v1/journals
-PUT    /api/v1/journals/:id
-DELETE /api/v1/journals/:id     (reserved; not called today)
-```
+- **`dmhub-app` owns the API surface.** Endpoint shapes, request/response payloads, auth model, and token issuance are all defined there. Until Epic E ships the contract is aspirational; this module runs against a stub server in the meantime.
+- **`gmhub-vtt` (this repo) owns its consumption side and its scope.** What we sync (content types, push/pull semantics, conflict policy) is documented in [`../SCOPE.md`](../SCOPE.md). The wire format mirrors what Epic E exposes.
 
 ### Auth
 
@@ -39,14 +34,14 @@ Per-GM API tokens issued by `dmhub-app`, sent as `Authorization: Bearer <token>`
 
 ### Rules of engagement
 
-- **`gmhub-vtt/README.md` (this repo) owns the request/response shapes.** If we change them here, follow up in `dmhub-app`.
-- **`dmhub-app` owns the token model.** If their API-token surface changes, expect a docs follow-up in this repo.
+- **`dmhub-app` makes the call on shape changes.** If they change a payload, this module's `api-client.js` follows; bump `module.json#version` for any consumer-facing change.
+- **This repo makes the call on scope.** If the set of content types we sync (or the push/pull semantics) changes, edit `SCOPE.md` first, then open a follow-up in `dmhub-app/docs/EPICS.md`.
 - Both repos keep their `docs/EPICS.md` in sync at the cross-link points (Epic E / Epic G there ↔ GMV-* here).
 
 ## When to update this file
 
-- A new endpoint is added or removed.
-- The auth header changes.
-- The token-issuance surface in `dmhub-app` changes.
+- The ownership of the API surface changes (e.g., this repo takes over part of it).
+- The auth model changes (e.g., from bearer-token to OAuth).
+- The set of repos in the ecosystem changes (e.g., a third repo joins).
 
-Otherwise, leave this file alone — the per-endpoint detail lives in this repo's `README.md`. Editing here for cosmetic reasons creates exactly the drift the file exists to prevent.
+Otherwise, leave this file alone — endpoint detail belongs in `dmhub-app`'s code/docs, scope detail belongs in this repo's `SCOPE.md`.
