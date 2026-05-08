@@ -25,7 +25,7 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
 | Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.3.3` |
+| Current version | `0.3.4` |
 | Foundry compat | v11 minimum, v14 verified, v14 maximum |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
@@ -50,7 +50,7 @@ Source layout:
 ```
 module.json              # Foundry manifest
 scripts/
-  main.js                # Module entry; hooks init, ready, getJournalDirectoryEntryContext
+  main.js                # Module entry; hooks init, ready, getJournalDirectoryEntryContext; v14 i18n shim
   api-client.js          # REST client: ping, list, get, create, update; bearer auth
   sync.js                # Push/pull orchestration; tiptapToHtml; flag-based ID reconciliation
   ui.js                  # Sync dialog, sidebar button, settings registration
@@ -78,15 +78,15 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 > **Update this section at the start of every new release.**
 
-`v0.3.3` is a v14 hotfix continuation that addresses two bugs surfaced when v0.3.2 was actually used to consume content: (1) entity summaries, note bodies, and session plan `gm_notes` / `gm_secrets` rendered as raw `{"type":"doc",...}` JSON in journal pages because the API ships Tiptap ProseMirror-JSON and the module was storing it verbatim with `format: 1` (HTML); (2) the sidebar Sync button label baked in the raw `GMHUB.Button.OpenDialog` key because Foundry doesn't await async `i18nInit` listeners, so the journal directory rendered before the manual lang fetch resolved. Fixes: `tiptapToHtml()` walker in `sync.js` handles paragraphs/headings/lists/blockquotes/code/marks plus the GMhub-specific `mention` extension, used in all four pull paths; `i18nInit` now calls `ui.journal?.render(false)` after the merge so the button label gets a second pass with the loaded strings.
+`v0.3.4` is the v14 i18n hotfix that finally takes. v0.3.2/0.3.3 tried to fix the all-raw-keys symptom by manually fetching `lang/en.json` and `mergeObject`-ing the expanded form into `game.i18n.translations`; that didn't take in v14 (presumably the actual lookup target moved to a private store and the public property no longer round-trips). v0.3.4 stops mutating Foundry's store and instead **wraps `game.i18n.localize` and `game.i18n.format` directly** with a fallback to the manually-fetched flat dictionary. The original implementations are still called first; the wrapper only returns from our cache when Foundry signals "not found" (returns the raw key). Foundry's Handlebars `{{localize}}` helper goes through `game.i18n.localize`, so this single patch covers settings labels, dialog buttons, push-preview body strings, lifecycle confirmations — every i18n call site in this module's UI.
 
 ## 5. Known Issues & Tech Debt
 
 | Priority | Issue | Notes |
 |---|---|---|
-| 🟠 High | Push is lossy on rich-text fields | Pull renders Tiptap JSON → HTML, but Push sends `page.text.content` (HTML) back to gmhub-app whose API expects Tiptap JSON. A round-trip Pull → edit in Foundry → Push will either 400 or corrupt the body. Fix needs either an HTML → Tiptap converter in this module or HTML acceptance on the gmhub-app side. Out of scope for v0.3.3; tracked as new backlog item. |
+| 🟠 High | Push is lossy on rich-text fields | Pull renders Tiptap JSON → HTML, but Push sends `page.text.content` (HTML) back to gmhub-app whose API expects Tiptap JSON. A round-trip Pull → edit in Foundry → Push will either 400 or corrupt the body. Fix needs either an HTML → Tiptap converter in this module or HTML acceptance on the gmhub-app side. Tracked as GMV-6. |
 | 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog and editors are V1; migration to ApplicationV2 deferred to v0.4.0. |
-| 🟢 Low | Root cause of v14 lang auto-load failure unknown | v0.3.2 ships a defensive manual fetch in `i18nInit` that works around it; v0.3.3 forces a journal re-render after the merge to fix the button-label race. The underlying Foundry behaviour is undiagnosed. |
+| 🟢 Low | Root cause of v14 lang auto-load failure unknown | Three releases of escalating workarounds (mergeObject → journal re-render → patched localize) before the symptom was fully suppressed. The underlying Foundry behaviour is undiagnosed; if v15 / a v14 patch release re-breaks this, revisit then. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. Consider Quench or a stub Foundry environment if churn warrants it. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 

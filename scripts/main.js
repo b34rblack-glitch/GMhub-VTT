@@ -101,18 +101,22 @@ Hooks.once("init", () => {
   }
 });
 
-// Defensive language-pack load. v0.3.1 in Foundry v14 surfaced UIs full of
-// raw i18n keys (GMHUB.Settings.BaseUrl.Name etc.) even though module.json
-// declares lang/en.json correctly and the file is in the release zip. Root
-// cause is unclear (suspected v13/v14 change in module language-pack
-// auto-load); the manual fetch + mergeObject here is a no-op if the
-// auto-loader worked, and rescues the UI if it didn't.
+// v14 i18n compatibility shim. v0.3.1–0.3.3 surfaced raw `GMHUB.*` keys in
+// settings, dialogs, and template-rendered button labels even though
+// `lang/en.json` is correctly declared in `module.json` and ships in the
+// release zip. v0.3.2/0.3.3 attempted to fix it by manually fetching the
+// file and `mergeObject`-ing the expanded form into
+// `game.i18n.translations` — that didn't take, presumably because v14 has
+// moved the actual lookup target to a private store and the public
+// `translations` property no longer round-trips into it.
 //
-// v0.3.3: re-render the journal directory after the merge so the sidebar
-// button label picks up the loaded strings. Foundry doesn't await async
-// i18nInit listeners, so renderJournalDirectory can fire before this fetch
-// resolves and bake the raw key into the button — forcing a re-render here
-// gives the synchronous localize() inside that hook a second pass.
+// v0.3.4 stops trying to mutate Foundry's internal store and instead
+// patches `game.i18n.localize` and `game.i18n.format` directly. Foundry's
+// Handlebars `{{localize}}` / `{{localizeKey}}` helpers call these methods,
+// so the override covers templates, settings labels, button text, and
+// every direct `game.i18n.localize("...")` call in this module's code.
+// The original implementations are still called first; we only fall back
+// to our cache when Foundry returns the raw key (its "not found" signal).
 Hooks.once("i18nInit", async () => {
   try {
     const res = await fetch(`modules/${MODULE_ID}/lang/en.json`);
@@ -121,10 +125,45 @@ Hooks.once("i18nInit", async () => {
       return;
     }
     const flat = await res.json();
-    const expanded = foundry.utils.expandObject(flat);
-    foundry.utils.mergeObject(game.i18n.translations, expanded, { inplace: true });
-    if (typeof ui !== "undefined" && ui?.journal?.render) {
-      ui.journal.render(false);
+
+    if (game.i18n.localize?.__gmhubPatched) {
+      // Defensive: avoid double-patching if i18nInit fires twice (hot reload).
+      return;
+    }
+
+    const origLocalize = game.i18n.localize.bind(game.i18n);
+    const patchedLocalize = function (key) {
+      const fromOriginal = origLocalize(key);
+      // Foundry's localize returns the raw key when not found.
+      if (fromOriginal !== key) return fromOriginal;
+      return Object.prototype.hasOwnProperty.call(flat, key) ? flat[key] : key;
+    };
+    patchedLocalize.__gmhubPatched = true;
+    game.i18n.localize = patchedLocalize;
+
+    const origFormat = game.i18n.format.bind(game.i18n);
+    const patchedFormat = function (key, data) {
+      const fromOriginal = origFormat(key, data);
+      if (fromOriginal !== key) return fromOriginal;
+      const template = flat[key];
+      if (typeof template !== "string") return key;
+      return template.replace(/\{(\w+)\}/g, (_, k) =>
+        data && Object.prototype.hasOwnProperty.call(data, k) ? String(data[k]) : `{${k}}`
+      );
+    };
+    patchedFormat.__gmhubPatched = true;
+    game.i18n.format = patchedFormat;
+
+    // Re-render any UI that already painted with raw keys before the patch
+    // landed. Settings panel + journal sidebar are the obvious ones; the
+    // dialogs render lazily on click so they don't need a kick.
+    if (typeof ui !== "undefined") {
+      ui.journal?.render?.(false);
+      // SettingsConfig is opened on demand; if it's open right now, kick it.
+      const settingsApp = Object.values(ui.windows ?? {}).find(
+        (w) => w?.constructor?.name === "SettingsConfig"
+      );
+      settingsApp?.render?.(false);
     }
   } catch (err) {
     console.warn(`[${MODULE_ID}] manual lang load failed`, err);
