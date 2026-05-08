@@ -3,9 +3,9 @@
 // Hook discipline: register all hooks here in init/ready blocks, per
 // CLAUDE.md §6. Other files only export classes/functions.
 
-import { GmhubClient } from "./api-client.js";
+import { GMhubClient } from "./api-client.js";
 import { SyncService } from "./sync.js";
-import { openAgendaEditorForPage, PickSessionDialog, SyncDialog } from "./ui.js";
+import { PickSessionDialog, SyncDialog } from "./ui.js";
 
 export const MODULE_ID = "gmhub-vtt";
 
@@ -86,19 +86,8 @@ Hooks.once("init", () => {
   loadTemplates([
     `modules/${MODULE_ID}/templates/sync-dialog.hbs`,
     `modules/${MODULE_ID}/templates/pick-session.hbs`,
-    `modules/${MODULE_ID}/templates/confirm-overwrite.hbs`,
-    `modules/${MODULE_ID}/templates/lifecycle-confirm.hbs`,
-    `modules/${MODULE_ID}/templates/push-preview.hbs`,
-    `modules/${MODULE_ID}/templates/agenda-editor.hbs`
+    `modules/${MODULE_ID}/templates/confirm-overwrite.hbs`
   ]);
-
-  // Register a minimal `eq` helper for the agenda editor's <select> defaults.
-  // Module-namespaced via the loose convention of prefixing helper names is
-  // unnecessary here — Handlebars helpers are global, but `eq` is a benign,
-  // commonly-shared name that other modules also expect to exist.
-  if (!Handlebars.helpers.eq) {
-    Handlebars.registerHelper("eq", (a, b) => a === b);
-  }
 });
 
 Hooks.once("ready", () => {
@@ -112,8 +101,7 @@ Hooks.once("ready", () => {
     client,
     sync,
     openDialog: () => new SyncDialog(sync).render(true),
-    openPickSession: () => new PickSessionDialog(client).render(true),
-    openAgendaEditor: (page) => openAgendaEditorForPage(page)
+    openPickSession: () => new PickSessionDialog(client).render(true)
   };
 });
 
@@ -158,31 +146,6 @@ Hooks.on("updateJournalEntry", async (entry, _change, _options, userId) => {
   } catch (err) {
     console.error("[gmhub-vtt] auto-push failed", err);
   }
-});
-
-// DMHUB-161 — surface "Edit Agenda / Edit Pinned" on the page right-click
-// context menu inside a session journal's table of contents. The hook fires
-// in Foundry v12 when the user right-clicks a page row in the TOC; in
-// earlier or later versions where the hook name has shifted, the GM can
-// still call game.modules.get("gmhub-vtt").api.openAgendaEditor(page).
-Hooks.on("getJournalEntryPageContextOptions", (app, options) => {
-  if (!game.user.isGM) return;
-  options.push({
-    name: "GMHUB.Context.EditAgenda",
-    icon: '<i class="fas fa-list-ol"></i>',
-    condition: (li) => {
-      const pageId = li?.data?.("page-id") ?? li?.data?.("pageId");
-      const page = app?.object?.pages?.get?.(pageId);
-      if (!page) return false;
-      if (page.parent?.getFlag(MODULE_ID, "kind") !== "session") return false;
-      return page.name === "Agenda" || page.name === "Pinned";
-    },
-    callback: (li) => {
-      const pageId = li?.data?.("page-id") ?? li?.data?.("pageId");
-      const page = app?.object?.pages?.get?.(pageId);
-      openAgendaEditorForPage(page);
-    }
-  });
 });
 
 Hooks.on("updateJournalEntryPage", async (page, _change, _options, userId) => {

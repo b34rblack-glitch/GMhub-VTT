@@ -16,7 +16,6 @@
 
 import { MODULE_ID } from "./main.js";
 import { describePingFailure, describePingResult, safeCall } from "./error-toaster.js";
-import { renderAgendaHtml, renderPinnedHtml, SESSION_PLAN_FLAGS, SESSION_PLAN_PAGE_NAMES } from "./sync.js";
 
 function statusLabel(session) {
   if (session.ended_at) return "ended";
@@ -25,29 +24,12 @@ function statusLabel(session) {
   return "prep";
 }
 
-// Map a session's status label to which lifecycle transitions are valid for it.
-// Mirrors the server-side state machine in dmhub-app's lifecycle route.
-function lifecycleAvailableFor(status) {
-  switch (status) {
-    case "prep":   return { start: true,  pause: false, resume: false, end: false };
-    case "live":   return { start: false, pause: true,  resume: false, end: true  };
-    case "paused": return { start: false, pause: false, resume: true,  end: true  };
-    default:       return { start: false, pause: false, resume: false, end: false };
-  }
-}
-
 export class SyncDialog extends Application {
   constructor(sync, options = {}) {
     super(options);
     this.sync = sync;
     this.status = "";
     this.output = "";
-    // Cached session-status state; populated by _refreshSessionStatus on
-    // dialog open and after each lifecycle transition. Per SCOPE "Manual sync
-    // only" — never polled.
-    this.sessionStatus = null;
-    this.sessionStatusError = null;
-    this.lifecycleBusy = false;
   }
 
   static get defaultOptions() {
@@ -62,20 +44,13 @@ export class SyncDialog extends Application {
   }
 
   getData() {
-    const lifecycle = lifecycleAvailableFor(this.sessionStatus);
-    const anyLifecycleVisible = lifecycle.start || lifecycle.pause || lifecycle.resume || lifecycle.end;
     return {
       baseUrl: game.settings.get(MODULE_ID, "baseUrl"),
       campaignId: game.settings.get(MODULE_ID, "campaignId"),
       activeSessionId: game.settings.get(MODULE_ID, "activeSessionId"),
       lastPullAt: game.settings.get(MODULE_ID, "lastPullAt") || game.i18n.localize("GMHUB.Dialog.Never"),
       status: this.status,
-      output: this.output,
-      sessionStatus: this.sessionStatus,
-      sessionStatusError: this.sessionStatusError,
-      lifecycle,
-      anyLifecycleVisible,
-      lifecycleBusy: this.lifecycleBusy
+      output: this.output
     };
   }
 
@@ -163,11 +138,6 @@ export class SyncDialog extends Application {
       picker.render(true);
     });
 
-    html.find('[data-action="session-start"]').on("click", () => this._runLifecycle("start"));
-    html.find('[data-action="session-pause"]').on("click", () => this._runLifecycle("pause"));
-    html.find('[data-action="session-resume"]').on("click", () => this._runLifecycle("resume"));
-    html.find('[data-action="session-end"]').on("click", () => this._runLifecycle("end", { confirm: true }));
-
     html.find('[data-action="ping"]').on("click", async () => {
       this._setStatus(game.i18n.localize("GMHUB.Notify.Pinging"));
       try {
@@ -229,28 +199,6 @@ export class SyncDialog extends Application {
     });
 
     html.find('[data-action="push"]').on("click", async () => {
-      const preview = this.sync.previewPush();
-      if (preview.error === "no_campaign_bound") {
-        this._setStatus(game.i18n.localize("GMHUB.Notify.PushFailed"), preview.error);
-        return;
-      }
-      const confirmed = await new Promise((resolve) => {
-        let resolved = false;
-        const dialog = new PushPreviewDialog({
-          preview,
-          onConfirm: () => { resolved = true; resolve(true); }
-        });
-        const origClose = dialog.close.bind(dialog);
-        dialog.close = async (...args) => {
-          if (!resolved) resolve(false);
-          return origClose(...args);
-        };
-        dialog.render(true);
-      });
-      if (!confirmed) {
-        this._setStatus(game.i18n.localize("GMHUB.Notify.PushCancelled"));
-        return;
-      }
       this._setStatus(game.i18n.localize("GMHUB.Notify.Pushing"));
       try {
         const result = await safeCall(() => this.sync.pushAll());
@@ -274,6 +222,121 @@ export class SyncDialog extends Application {
     this.status = message;
     this.output = output;
     this.render(false);
+  }
+}
+
+// DMHUB-153 (E10). FormApplication subclass — even though we don't submit a
+// form, FormApplication gives us focus management + close-on-Escape semantics
+// without rolling our own.
+export class PickSessionDialog extends Application {
+  constructor(client, options = {}) {
+    super(options);
+    this.client = client;
+    this.onPicked = options.onPicked ?? (() => {});
+    this.sessions = [];
+    this.loading = true;
+    this.error = null;
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "gmhub-pick-session-dialog",
+      title: "Pick a prepped session",
+      template: `modules/${MODULE_ID}/templates/pick-session.hbs`,
+      width: 520,
+      height: "auto",
+      classes: ["gmhub-pick-session-dialog"]
+    });
+  }
+
+  async _refresh() {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) {
+      this.loading = false;
+      this.error = game.i18n.localize("GMHUB.PickSession.NoCampaign");
+      this.sessions = [];
+      this.render(false);
+      return;
+    }
+    this.loading = true;
+    this.error = null;
+    this.render(false);
+    try {
+      // E11 ships listSessions; until then it returns an empty array. The
+      // template already renders the empty-state message in that case.
+      const sessions = (typeof this.client.listSessions === "function")
+        ? await this.client.listSessions(campaignId)
+        : [];
+      this.sessions = (sessions ?? []).map((s) => ({
+        ...s,
+        statusLabel: statusLabel(s)
+      }));
+    } catch (err) {
+      this.error = err.message ?? String(err);
+      this.sessions = [];
+    }
+    this.loading = false;
+    this.render(false);
+  }
+
+  getData() {
+    return {
+      loading: this.loading,
+      error: this.error,
+      sessions: this.sessions
+    };
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    if (this.loading && !this.error) this._refresh();
+
+    html.find('[data-action="refresh"]').on("click", () => this._refresh());
+
+    html.find('[data-action="pick"]').on("click", async (evt) => {
+      const sessionId = evt.currentTarget.dataset.sessionId;
+      if (!sessionId) return;
+      const session = this.sessions.find((s) => s.id === sessionId);
+      if (!session) return;
+      await game.settings.set(MODULE_ID, "activeSessionId", sessionId);
+      this.onPicked(session);
+      this.close();
+    });
+  }
+}
+
+export class ConfirmOverwriteDialog extends Application {
+  constructor({ dirtyEntries = [], onConfirm = () => {} } = {}, options = {}) {
+    super(options);
+    this.dirtyEntries = dirtyEntries;
+    this.onConfirm = onConfirm;
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "gmhub-confirm-overwrite",
+      title: "Confirm overwrite",
+      template: `modules/${MODULE_ID}/templates/confirm-overwrite.hbs`,
+      width: 480,
+      height: "auto",
+      classes: ["gmhub-confirm-overwrite-dialog"]
+    });
+  }
+
+  getData() {
+    return {
+      dirtyCount: this.dirtyEntries.length,
+      dirtyEntries: this.dirtyEntries
+    };
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    html.find('[data-action="cancel"]').on("click", () => this.close());
+    html.find('[data-action="overwrite"]').on("click", () => {
+      this.onConfirm();
+      this.close();
+    });
   }
 }
 
