@@ -36,6 +36,9 @@ jobs:
           echo "VERSION=$TAG" >> "$GITHUB_ENV"
 
       - name: Build versioned manifest
+        # Staged as `module-released.json` (not `module.json`) so the
+        # zip-build step below can keep the source manifest untouched
+        # while it copies the versioned one into `dist/module.json`.
         run: |
           set -euo pipefail
           jq --arg v "$VERSION" \
@@ -58,6 +61,14 @@ jobs:
           (cd dist && zip -r ../module.zip .)
           ls -la module.zip
 
+      - name: Stage manifest as module.json for release upload
+        # Foundry polls `…/releases/latest/download/module.json`, so the
+        # standalone release asset MUST be named exactly `module.json` —
+        # softprops/action-gh-release uploads each file using its on-disk
+        # basename. Rename now that the zip-build step is done; the
+        # workspace `module.json` is ephemeral so overwriting it is safe.
+        run: mv -f module-released.json module.json
+
       # softprops/action-gh-release@v2.0.8 — pinned to commit SHA.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191
@@ -66,6 +77,6 @@ jobs:
           generate_release_notes: true
           files: |
             module.zip
-            module-released.json
+            module.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
