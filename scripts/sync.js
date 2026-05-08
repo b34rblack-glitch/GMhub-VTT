@@ -299,17 +299,249 @@ export class SyncService {
     return result;
   }
 
-  // ---- Push (stubbed in this commit; lands in DMHUB-155 follow-up) ----
+  // ---- Push ----
+
+  // Drain the world-flag-backed quick-note queue first, per GMhub-VTT SCOPE
+  // §Behaviour contracts: "Quick notes are queued in Foundry world flags so
+  // a brief network blip doesn't lose them." Successful entries are removed
+  // from the queue; failed ones stay for the next push.
+  async _drainQuickNoteQueue(campaignId, sessionId, result) {
+    if (!sessionId) return;
+    const queue = game.settings.get(MODULE_ID, "pendingPushQueue") ?? [];
+    if (!queue.length) return;
+    const remaining = [];
+    for (const item of queue) {
+      try {
+        await this.client.addQuickNote(campaignId, sessionId, {
+          body: item.body,
+          mentioned_entity_id: item.mentioned_entity_id ?? null
+        });
+        result.pushed.quickNotes += 1;
+      } catch (err) {
+        remaining.push(item);
+        result.errors.push({
+          name: "quick-note",
+          message: err.message ?? String(err)
+        });
+      }
+    }
+    await game.settings.set(MODULE_ID, "pendingPushQueue", remaining);
+  }
+
+  async _pushEntityPage(campaignId, kind, page, result) {
+    const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+    const visibility = page.getFlag(MODULE_ID, FLAG_VISIBILITY) ?? "campaign";
+    const payload = {
+      entity_type: kind,
+      name: page.name,
+      summary: page.text?.content ?? "",
+      visibility
+    };
+    try {
+      let row;
+      if (externalId) {
+        row = await this.client.updateEntity(campaignId, externalId, {
+          name: payload.name,
+          summary: payload.summary,
+          visibility: payload.visibility
+        });
+      } else {
+        row = await this.client.createEntity(campaignId, payload);
+        // Write the assigned id back so the next push updates instead of
+        // creating a duplicate.
+        await page.setFlag(MODULE_ID, FLAG_EXTERNAL_ID, row.id);
+      }
+      // Reveal flag — flip on the server if the page-flag disagrees.
+      const localRevealed = page.getFlag(MODULE_ID, FLAG_REVEALED_AT);
+      if (Boolean(localRevealed) !== Boolean(row.revealed_at)) {
+        await this.client.setEntityReveal(campaignId, row.id, Boolean(localRevealed));
+      }
+      await page.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      result.pushed.entities += 1;
+    } catch (err) {
+      result.failed += 1;
+      result.errors.push({
+        name: page.name,
+        message: err.message ?? String(err),
+        body: err.body ?? null
+      });
+    }
+  }
+
+  async _pushNotePage(campaignId, page, result) {
+    const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+    const visibility = page.getFlag(MODULE_ID, FLAG_VISIBILITY) ?? "campaign";
+    const payload = {
+      title: page.name,
+      body: page.text?.content ?? "",
+      visibility
+    };
+    try {
+      let row;
+      if (externalId) {
+        row = await this.client.updateNote(campaignId, externalId, payload);
+      } else {
+        row = await this.client.createNote(campaignId, payload);
+        await page.setFlag(MODULE_ID, FLAG_EXTERNAL_ID, row.id);
+      }
+      await page.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      result.pushed.notes += 1;
+    } catch (err) {
+      result.failed += 1;
+      result.errors.push({
+        name: page.name,
+        message: err.message ?? String(err),
+        body: err.body ?? null
+      });
+    }
+  }
+
+  async _pushSessionPlan(campaignId, sessionId, result) {
+    const journal = game.journal.contents.find(
+      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "session"
+    );
+    if (!journal) return;
+
+    // Map page name → text content. We treat pages by canonical name rather
+    // than by id so a GM accidentally renaming the journal still pushes.
+    const byName = new Map();
+    for (const p of journal.pages.contents) byName.set(p.name, p);
+
+    const partial = {};
+    const gmNotes = byName.get(SESSION_PAGE_GM_NOTES);
+    if (gmNotes && gmNotes.getFlag(MODULE_ID, FLAG_DIRTY)) {
+      partial.gm_notes = gmNotes.text?.content ?? "";
+    }
+    const secrets = byName.get(SESSION_PAGE_SECRETS);
+    if (secrets && secrets.getFlag(MODULE_ID, FLAG_DIRTY)) {
+      // The server returns 403 if the token lacks sessions:secrets — bubble
+      // it up so E13 can toast the friendly error.
+      partial.gm_secrets = secrets.text?.content ?? "";
+    }
+    // We don't push agenda or pinned today — they're rendered HTML on pull;
+    // round-tripping needs a structured editor (out of scope for v1).
+
+    if (Object.keys(partial).length === 0) return;
+
+    try {
+      await this.client.updateSessionPlan(campaignId, sessionId, partial);
+      if (gmNotes) await gmNotes.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      if (secrets && partial.gm_secrets !== undefined) {
+        await secrets.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      }
+      result.pushed.sessionPlan = true;
+    } catch (err) {
+      result.failed += 1;
+      result.errors.push({
+        name: "session-plan",
+        message: err.message ?? String(err),
+        body: err.body ?? null
+      });
+    }
+  }
 
   async pushAll() {
-    throw new Error("pushAll not implemented yet — see DMHUB-155 follow-up.");
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) {
+      return { error: "no_campaign_bound" };
+    }
+    const activeSessionId = game.settings.get(MODULE_ID, "activeSessionId");
+
+    const result = {
+      pushed: { entities: 0, notes: 0, sessionPlan: false, quickNotes: 0 },
+      failed: 0,
+      errors: []
+    };
+
+    await this._drainQuickNoteQueue(campaignId, activeSessionId, result);
+
+    // Entities — walk each kind-journal.
+    for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
+      const journal = game.journal.contents.find(
+        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
+      );
+      if (!journal) continue;
+      for (const page of journal.pages.contents) {
+        if (page.type !== "text") {
+          console.info(`[gmhub-vtt] skipping non-text page "${page.name}" in ${journal.name}`);
+          continue;
+        }
+        await this._pushEntityPage(campaignId, kind, page, result);
+      }
+    }
+
+    // Notes — single journal.
+    const notesJournal = game.journal.contents.find(
+      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes"
+    );
+    if (notesJournal) {
+      for (const page of notesJournal.pages.contents) {
+        if (page.type !== "text") {
+          console.info(`[gmhub-vtt] skipping non-text note page "${page.name}"`);
+          continue;
+        }
+        await this._pushNotePage(campaignId, page, result);
+      }
+    }
+
+    // Session plan — only if a session is bound.
+    if (activeSessionId) {
+      await this._pushSessionPlan(campaignId, activeSessionId, result);
+    }
+
+    return result;
   }
 
-  async pushOne(_entry) {
-    throw new Error("pushOne not implemented yet — see DMHUB-155 follow-up.");
+  // Push a single JournalEntry (the "Push to DMhub" context-menu action in
+  // main.js). Maps to the same per-page upserts pushAll does, scoped to one
+  // entry. Entry must carry flags.gmhub-vtt.kind so we know what to do with it.
+  async pushOne(entry) {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) throw new Error("no_campaign_bound");
+    const kind = entry.getFlag(MODULE_ID, FLAG_KIND);
+    const result = {
+      pushed: { entities: 0, notes: 0, sessionPlan: false, quickNotes: 0 },
+      failed: 0,
+      errors: []
+    };
+
+    if (kind === "notes") {
+      for (const page of entry.pages.contents) {
+        if (page.type !== "text") continue;
+        await this._pushNotePage(campaignId, page, result);
+      }
+    } else if (KIND_JOURNAL_NAMES[kind]) {
+      for (const page of entry.pages.contents) {
+        if (page.type !== "text") continue;
+        await this._pushEntityPage(campaignId, kind, page, result);
+      }
+    } else if (kind === "session") {
+      const sessionId = entry.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+      if (sessionId) await this._pushSessionPlan(campaignId, sessionId, result);
+    } else {
+      // Unknown / unflagged entry — don't guess.
+      throw new Error("entry_not_bound_to_dmhub");
+    }
+    return result;
   }
 
-  async pushJournal(_entry) {
-    throw new Error("pushJournal not implemented yet — see DMHUB-155 follow-up.");
+  // Back-compat alias for the journal context-menu hook in main.js.
+  pushJournal(entry) {
+    return this.pushOne(entry);
+  }
+
+  // Public helper for the auto-push hook in main.js: just mark the entry as
+  // dirty so the next manual Push picks it up. Used when autoPushOnUpdate
+  // is OFF (the default per Foundry SCOPE "Manual sync only.").
+  async markDirty(entry) {
+    await entry.setFlag(MODULE_ID, FLAG_DIRTY, true);
+  }
+
+  // Public helper for offline quick-note capture. Pushes to the queue; the
+  // next pushAll drains it.
+  async enqueueQuickNote(body, mentionedEntityId = null) {
+    const queue = game.settings.get(MODULE_ID, "pendingPushQueue") ?? [];
+    queue.push({ body, mentioned_entity_id: mentionedEntityId, queued_at: new Date().toISOString() });
+    await game.settings.set(MODULE_ID, "pendingPushQueue", queue);
   }
 }

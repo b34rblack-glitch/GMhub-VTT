@@ -127,14 +127,33 @@ Hooks.on("getJournalEntryContextOptions", (html, options) => {
   });
 });
 
+// DMHUB-155 (E12). On any GM-driven journal edit, mark the entry dirty so
+// the next manual Pull warns + the next manual Push picks it up. Auto-push
+// is off by default per GMhub-VTT SCOPE "Manual sync only" — only call
+// pushOne when the GM has opted in via the autoPushOnUpdate setting.
 Hooks.on("updateJournalEntry", async (entry, _change, _options, userId) => {
   if (game.user.id !== userId) return;
   if (!game.user.isGM) return;
-  if (!game.settings.get(MODULE_ID, "autoPushOnUpdate")) return;
   const { sync } = game.modules.get(MODULE_ID).api;
   try {
-    await sync.pushJournal(entry);
+    await sync.markDirty(entry);
+  } catch (err) {
+    console.warn("[gmhub-vtt] markDirty failed", err);
+  }
+  if (!game.settings.get(MODULE_ID, "autoPushOnUpdate")) return;
+  try {
+    await sync.pushOne(entry);
   } catch (err) {
     console.error("[gmhub-vtt] auto-push failed", err);
+  }
+});
+
+Hooks.on("updateJournalEntryPage", async (page, _change, _options, userId) => {
+  if (game.user.id !== userId) return;
+  if (!game.user.isGM) return;
+  try {
+    await page.setFlag(MODULE_ID, "dirty", true);
+  } catch (err) {
+    console.warn("[gmhub-vtt] page markDirty failed", err);
   }
 });
