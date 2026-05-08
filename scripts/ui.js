@@ -24,12 +24,29 @@ function statusLabel(session) {
   return "prep";
 }
 
+// Map a session's status label to which lifecycle transitions are valid for it.
+// Mirrors the server-side state machine in dmhub-app's lifecycle route.
+function lifecycleAvailableFor(status) {
+  switch (status) {
+    case "prep":   return { start: true,  pause: false, resume: false, end: false };
+    case "live":   return { start: false, pause: true,  resume: false, end: true  };
+    case "paused": return { start: false, pause: false, resume: true,  end: true  };
+    default:       return { start: false, pause: false, resume: false, end: false };
+  }
+}
+
 export class SyncDialog extends Application {
   constructor(sync, options = {}) {
     super(options);
     this.sync = sync;
     this.status = "";
     this.output = "";
+    // Cached session-status state; populated by _refreshSessionStatus on
+    // dialog open and after each lifecycle transition. Per SCOPE "Manual sync
+    // only" — never polled.
+    this.sessionStatus = null;
+    this.sessionStatusError = null;
+    this.lifecycleBusy = false;
   }
 
   static get defaultOptions() {
@@ -44,18 +61,91 @@ export class SyncDialog extends Application {
   }
 
   getData() {
+    const lifecycle = lifecycleAvailableFor(this.sessionStatus);
+    const anyLifecycleVisible = lifecycle.start || lifecycle.pause || lifecycle.resume || lifecycle.end;
     return {
       baseUrl: game.settings.get(MODULE_ID, "baseUrl"),
       campaignId: game.settings.get(MODULE_ID, "campaignId"),
       activeSessionId: game.settings.get(MODULE_ID, "activeSessionId"),
       lastPullAt: game.settings.get(MODULE_ID, "lastPullAt") || game.i18n.localize("GMHUB.Dialog.Never"),
       status: this.status,
-      output: this.output
+      output: this.output,
+      sessionStatus: this.sessionStatus,
+      sessionStatusError: this.sessionStatusError,
+      lifecycle,
+      anyLifecycleVisible,
+      lifecycleBusy: this.lifecycleBusy
     };
+  }
+
+  async _refreshSessionStatus() {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    const sessionId = game.settings.get(MODULE_ID, "activeSessionId");
+    if (!campaignId || !sessionId) {
+      this.sessionStatus = null;
+      this.sessionStatusError = null;
+      return;
+    }
+    try {
+      const session = await this.sync.client.getSession(campaignId, sessionId);
+      this.sessionStatus = session ? statusLabel(session) : null;
+      this.sessionStatusError = null;
+    } catch (err) {
+      this.sessionStatus = null;
+      this.sessionStatusError = err.message ?? String(err);
+    }
+  }
+
+  async _runLifecycle(action, { confirm = false } = {}) {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    const sessionId = game.settings.get(MODULE_ID, "activeSessionId");
+    if (!campaignId || !sessionId) return;
+
+    if (confirm) {
+      const ok = await new Promise((resolve) => {
+        let resolved = false;
+        const dialog = new LifecycleConfirmDialog({
+          action,
+          onConfirm: () => { resolved = true; resolve(true); }
+        });
+        const origClose = dialog.close.bind(dialog);
+        dialog.close = async (...args) => {
+          if (!resolved) resolve(false);
+          return origClose(...args);
+        };
+        dialog.render(true);
+      });
+      if (!ok) return;
+    }
+
+    this.lifecycleBusy = true;
+    this._setStatus(game.i18n.localize(`GMHUB.Notify.Lifecycle.${capitalize(action)}.InProgress`));
+    try {
+      await safeCall(() => this.sync.client.transitionLifecycle(campaignId, sessionId, action));
+      await this._refreshSessionStatus();
+      this.lifecycleBusy = false;
+      const doneKey = `GMHUB.Notify.Lifecycle.${capitalize(action)}.Done`;
+      ui.notifications.info(game.i18n.localize(doneKey));
+      this._setStatus(game.i18n.localize(doneKey));
+    } catch (err) {
+      this.lifecycleBusy = false;
+      this._setStatus(
+        game.i18n.localize(`GMHUB.Notify.Lifecycle.${capitalize(action)}.Failed`),
+        err.message ?? ""
+      );
+    }
   }
 
   activateListeners(html) {
     super.activateListeners(html);
+
+    // First open of the dialog: lazily fetch the bound session's status so the
+    // lifecycle button row can render. Re-renders triggered by _setStatus skip
+    // this fetch (state already cached).
+    if (this.sessionStatus === null && this.sessionStatusError === null) {
+      const sessionId = game.settings.get(MODULE_ID, "activeSessionId");
+      if (sessionId) this._refreshSessionStatus().then(() => this.render(false));
+    }
 
     html.find('[data-action="open-settings"]').on("click", () => {
       // Foundry's standard way of opening Module Settings for a specific module.
@@ -71,6 +161,11 @@ export class SyncDialog extends Application {
       });
       picker.render(true);
     });
+
+    html.find('[data-action="session-start"]').on("click", () => this._runLifecycle("start"));
+    html.find('[data-action="session-pause"]').on("click", () => this._runLifecycle("pause"));
+    html.find('[data-action="session-resume"]').on("click", () => this._runLifecycle("resume"));
+    html.find('[data-action="session-end"]').on("click", () => this._runLifecycle("end", { confirm: true }));
 
     html.find('[data-action="ping"]').on("click", async () => {
       this._setStatus(game.i18n.localize("GMHUB.Notify.Pinging"));
@@ -234,6 +329,48 @@ export class PickSessionDialog extends Application {
       if (!session) return;
       await game.settings.set(MODULE_ID, "activeSessionId", sessionId);
       this.onPicked(session);
+      this.close();
+    });
+  }
+}
+
+function capitalize(s) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+export class LifecycleConfirmDialog extends Application {
+  constructor({ action, onConfirm = () => {} } = {}, options = {}) {
+    super(options);
+    this.action = action;
+    this.onConfirm = onConfirm;
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "gmhub-lifecycle-confirm",
+      title: "Confirm session action",
+      template: `modules/${MODULE_ID}/templates/lifecycle-confirm.hbs`,
+      width: 460,
+      height: "auto",
+      classes: ["gmhub-lifecycle-confirm-dialog"]
+    });
+  }
+
+  getData() {
+    const action = this.action;
+    return {
+      action,
+      titleKey: `GMHUB.Dialog.LifecycleConfirm.${capitalize(action)}.Title`,
+      bodyKey: `GMHUB.Dialog.LifecycleConfirm.${capitalize(action)}.Body`,
+      confirmKey: `GMHUB.Button.Session${capitalize(action)}`
+    };
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    html.find('[data-action="cancel"]').on("click", () => this.close());
+    html.find('[data-action="confirm"]').on("click", () => {
+      this.onConfirm();
       this.close();
     });
   }

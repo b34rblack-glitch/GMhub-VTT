@@ -27,6 +27,45 @@
       </section>
     {{/unless}}
 
+    {{#if activeSessionId}}
+      <section class="gmhub-lifecycle">
+        <p class="gmhub-lifecycle-state">
+          <strong>{{localize "GMHUB.Dialog.SessionStateLabel"}}</strong>
+          {{#if sessionStatus}}
+            <code>{{sessionStatus}}</code>
+          {{else if sessionStatusError}}
+            <em>{{localize "GMHUB.Dialog.SessionStateUnknown"}}</em>
+          {{else}}
+            <em>{{localize "GMHUB.Dialog.SessionStateLoading"}}</em>
+          {{/if}}
+        </p>
+        {{#if anyLifecycleVisible}}
+          <div class="gmhub-lifecycle-buttons">
+            {{#if lifecycle.start}}
+              <button type="button" data-action="session-start" {{#if lifecycleBusy}}disabled{{/if}}>
+                <i class="fas fa-play"></i> {{localize "GMHUB.Button.SessionStart"}}
+              </button>
+            {{/if}}
+            {{#if lifecycle.pause}}
+              <button type="button" data-action="session-pause" {{#if lifecycleBusy}}disabled{{/if}}>
+                <i class="fas fa-pause"></i> {{localize "GMHUB.Button.SessionPause"}}
+              </button>
+            {{/if}}
+            {{#if lifecycle.resume}}
+              <button type="button" data-action="session-resume" {{#if lifecycleBusy}}disabled{{/if}}>
+                <i class="fas fa-play"></i> {{localize "GMHUB.Button.SessionResume"}}
+              </button>
+            {{/if}}
+            {{#if lifecycle.end}}
+              <button type="button" data-action="session-end" {{#if lifecycleBusy}}disabled{{/if}}>
+                <i class="fas fa-stop"></i> {{localize "GMHUB.Button.SessionEnd"}}
+              </button>
+            {{/if}}
+          </div>
+        {{/if}}
+      </section>
+    {{/if}}
+
     <section class="gmhub-actions">
       <button type="button" data-action="ping">
         <i class="fas fa-plug"></i> {{localize "GMHUB.Button.TestConnection"}}

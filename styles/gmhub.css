@@ -22,6 +22,36 @@
   margin-bottom: 8px;
 }
 
+.gmhub-sync .gmhub-lifecycle {
+  border: 1px solid var(--color-border-light-tertiary);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.gmhub-sync .gmhub-lifecycle-state {
+  margin: 2px 0 6px;
+  font-size: 13px;
+}
+
+.gmhub-sync .gmhub-lifecycle-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gmhub-lifecycle-confirm-dialog .gmhub-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.gmhub-confirm-destructive {
+  background: var(--color-warning, #c0392b);
+  color: white;
+}
+
 .gmhub-sync .gmhub-status {
   background: rgba(0, 0, 0, 0.05);
   border-left: 3px solid var(--color-border-highlight);

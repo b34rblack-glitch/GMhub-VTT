@@ -3,7 +3,7 @@
 // Hook discipline: register all hooks here in init/ready blocks, per
 // CLAUDE.md §6. Other files only export classes/functions.
 
-import { GMhubClient } from "./api-client.js";
+import { GmhubClient } from "./api-client.js";
 import { SyncService } from "./sync.js";
 import { PickSessionDialog, SyncDialog } from "./ui.js";
 
@@ -86,12 +86,14 @@ Hooks.once("init", () => {
   loadTemplates([
     `modules/${MODULE_ID}/templates/sync-dialog.hbs`,
     `modules/${MODULE_ID}/templates/pick-session.hbs`,
-    `modules/${MODULE_ID}/templates/confirm-overwrite.hbs`
+    `modules/${MODULE_ID}/templates/confirm-overwrite.hbs`,
+    `modules/${MODULE_ID}/templates/lifecycle-confirm.hbs`,
+    `modules/${MODULE_ID}/templates/push-preview.hbs`
   ]);
 });
 
 Hooks.once("ready", () => {
-  const client = new GMhubClient({
+  const client = new GmhubClient({
     getBaseUrl: () => game.settings.get(MODULE_ID, "baseUrl"),
     getApiKey: () => game.settings.get(MODULE_ID, "apiKey")
   });
