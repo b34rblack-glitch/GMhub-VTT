@@ -33,7 +33,7 @@ For the cross-repo contract see [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md).
 
 | | |
 |---|---|
-| Module version | `0.3.6` |
+| Module version | `0.4.0` |
 | Foundry compatibility | v11–v14 (verified v14) |
 | System | dnd5e ≥3.0 |
 | Shipped feature log | [`docs/EPICS.md`](docs/EPICS.md) |
@@ -47,8 +47,8 @@ The cross-repo end-to-end gate is the seventeen-step checklist in [`docs/integra
 
 (See [`SCOPE.md`](SCOPE.md) for the full contract.)
 
-- **Pull** the GMhub codex (NPCs, Locations, Factions, Items, Quests, Lore), long-form notes, and the active session plan into Foundry as JournalEntries.
-- **Push** GM table-side work back to GMhub: visibility flips, new entries, edits, and quick-notes captured during play.
+- **Pull** the GMhub codex (NPCs, Locations, Factions, Items, Quests, Lore), long-form notes, and **a windowed slice of the session calendar** — all prep sessions + the most-recent recap + the running session if any — into Foundry as JournalEntries. Older recaps stay on the web app.
+- **Push** GM table-side work back to GMhub: visibility flips, new entries, edits, quick-notes captured during play, and plan edits routed to whichever session journal carries the dirty page.
 - **Manual** sync only. No live/background sync. The GM presses Pull or Push when they choose.
 - **One world ↔ one campaign.** Set once in module settings.
 
@@ -57,6 +57,7 @@ The cross-repo end-to-end gate is the seventeen-step checklist in [`docs/integra
 - Does not replace Foundry's native Scenes, Actors (D&D 5e sheets), combat tracker, or compendiums.
 - Does not import maps, player characters, encounters, or AI features.
 - Does not run sync in the background or mirror player-side actions.
+- Does not import the full session history. Pull is windowed (prep + last recap + running). Older recaps remain on the web app.
 
 ---
 
@@ -79,7 +80,7 @@ In Foundry: **Game Settings → Configure Settings → Module Settings → GMhub
 | Campaign       | Bound GMhub campaign for this Foundry world                 |
 | Auto-push      | Optional. When on, every page edit (text, name, eye toggle) is pushed to GMhub immediately. Default off to honour the manual-sync contract. |
 
-Push and Pull live in the **GMhub** section of the Journal sidebar. The per-page eye icon in the sidebar toggles GMhub's `visibility` field for that entity/note on the next Push.
+**Sync surface:** the **GMhub Sync** button in the Journal sidebar opens the dialog with Pull / Push / Test connection / Pick session / lifecycle controls. Pull populates a `GMhub Sessions` folder with one journal per windowed session; right-click any session journal → **Set as active session** to flip the lifecycle pointer.
 
 ## API contract
 
@@ -107,3 +108,4 @@ Roadmap (high level; the full backlog lives in [`docs/EPICS.md`](docs/EPICS.md))
 - Actor sync (5e character sheets ↔ GMhub)
 - Scene/map import
 - Webhook-driven live updates instead of polling
+- Manual fetch of older recaps outside the windowed pull (v0.5+)
