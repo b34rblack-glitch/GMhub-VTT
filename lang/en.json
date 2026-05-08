@@ -68,6 +68,7 @@
 
   "GMHUB.Context.PushOne": "Push to GMhub",
   "GMHUB.Context.EditAgenda": "Edit (GMhub)",
+  "GMHUB.Context.SetActiveSession": "Set as active session",
   "GMHUB.Notify.Pushed": "Pushed \"{name}\" to GMhub",
   "GMHUB.Notify.SessionBound": "Bound active session: {name}",
   "GMHUB.Notify.NotImplemented": "Not yet implemented — wires up in a follow-up commit.",

@@ -184,3 +184,19 @@
   font-weight: 500;
   white-space: nowrap;
 }
+
+/* 0.4.0-gamma: marker on the active session journal in the sidebar. The
+   directory's <li> for whichever JournalEntry has externalId ===
+   activeSessionId picks up this class via the renderJournalDirectory hook.
+   Subtle left-border tint + slightly heavier title weight — visible at a
+   glance without redrawing the rest of the row. */
+.gmhub-active-session {
+  position: relative;
+  border-left: 3px solid #6366f1;
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.gmhub-active-session .entry-name,
+.gmhub-active-session .document-name {
+  font-weight: 600;
+}
