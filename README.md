@@ -33,7 +33,7 @@ For the cross-repo contract see [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md).
 
 | | |
 |---|---|
-| Module version | `0.3.5` |
+| Module version | `0.3.6` |
 | Foundry compatibility | v11–v14 (verified v14) |
 | System | dnd5e ≥3.0 |
 | Shipped feature log | [`docs/EPICS.md`](docs/EPICS.md) |
@@ -77,8 +77,9 @@ In Foundry: **Game Settings → Configure Settings → Module Settings → GMhub
 | GMhub Base URL | Root URL of the GMhub-app deployment                        |
 | GMhub API Key  | Bearer token used in `Authorization: Bearer …` (GM-only)    |
 | Campaign       | Bound GMhub campaign for this Foundry world                 |
+| Auto-push      | Optional. When on, every page edit (text, name, eye toggle) is pushed to GMhub immediately. Default off to honour the manual-sync contract. |
 
-Push and Pull live in the **GMhub** section of the Journal sidebar.
+Push and Pull live in the **GMhub** section of the Journal sidebar. The per-page eye icon in the sidebar toggles GMhub's `visibility` field for that entity/note on the next Push.
 
 ## API contract
 
