@@ -1,38 +1,51 @@
 <div class="gmhub-sync">
   <section class="gmhub-info">
-    <p><strong>Base URL:</strong> {{baseUrl}}</p>
-    <p><strong>API key:</strong> {{#if hasKey}}configured{{else}}<em>missing</em>{{/if}}</p>
-    <p><strong>Last pull:</strong> {{lastPullAt}}</p>
+    <p><strong>{{localize "GMHUB.Dialog.BaseUrlLabel"}}</strong> {{baseUrl}}</p>
+    <p><strong>{{localize "GMHUB.Dialog.CampaignIdLabel"}}</strong>
+      {{#if campaignId}}<code>{{campaignId}}</code>{{else}}<em>{{localize "GMHUB.Dialog.NotSet"}}</em>{{/if}}
+    </p>
+    <p><strong>{{localize "GMHUB.Dialog.ActiveSessionLabel"}}</strong>
+      {{#if activeSessionId}}<code>{{activeSessionId}}</code>{{else}}<em>{{localize "GMHUB.Dialog.NotSet"}}</em>{{/if}}
+    </p>
+    <p><strong>{{localize "GMHUB.Dialog.LastPullLabel"}}</strong> {{lastPullAt}}</p>
   </section>
 
-  <section class="gmhub-actions">
-    <button type="button" data-action="ping"><i class="fas fa-plug"></i> Test connection</button>
-    <button type="button" data-action="push-all"><i class="fas fa-cloud-upload-alt"></i> Push all journals</button>
-    <button type="button" data-action="pull-all"><i class="fas fa-cloud-download-alt"></i> Pull all journals</button>
-  </section>
+  {{#unless campaignId}}
+    <section class="gmhub-empty">
+      <p>{{localize "GMHUB.Dialog.NoCampaignBody"}}</p>
+      <button type="button" data-action="open-settings">
+        <i class="fas fa-cog"></i> {{localize "GMHUB.Button.OpenSettings"}}
+      </button>
+    </section>
+  {{else}}
+    {{#unless activeSessionId}}
+      <section class="gmhub-empty">
+        <p>{{localize "GMHUB.Dialog.NoSessionBody"}}</p>
+        <button type="button" data-action="pick-session">
+          <i class="fas fa-list"></i> {{localize "GMHUB.Button.PickSession"}}
+        </button>
+      </section>
+    {{/unless}}
+
+    <section class="gmhub-actions">
+      <button type="button" data-action="ping">
+        <i class="fas fa-plug"></i> {{localize "GMHUB.Button.TestConnection"}}
+      </button>
+      <button type="button" data-action="pull" {{#unless activeSessionId}}disabled{{/unless}}>
+        <i class="fas fa-cloud-download-alt"></i> {{localize "GMHUB.Button.Pull"}}
+      </button>
+      <button type="button" data-action="push" {{#unless activeSessionId}}disabled{{/unless}}>
+        <i class="fas fa-cloud-upload-alt"></i> {{localize "GMHUB.Button.Push"}}
+      </button>
+      <button type="button" data-action="pick-session">
+        <i class="fas fa-list"></i> {{localize "GMHUB.Button.PickSession"}}
+      </button>
+    </section>
+  {{/unless}}
 
   {{#if status}}
     <section class="gmhub-status"><p>{{status}}</p></section>
   {{/if}}
 
-  {{#if result}}
-    <section class="gmhub-result">
-      <h3>Last {{result.kind}} result</h3>
-      <ul>
-        {{#if result.isPush}}<li>Pushed: {{result.pushed}}</li>{{/if}}
-        {{#if result.isPull}}<li>Pulled: {{result.pulled}}</li>{{/if}}
-        <li>Failed: {{result.failed}}</li>
-      </ul>
-      {{#if result.errors.length}}
-        <details>
-          <summary>Errors ({{result.errors.length}})</summary>
-          <ul>
-            {{#each result.errors}}
-              <li><strong>{{this.name}}:</strong> {{this.message}}</li>
-            {{/each}}
-          </ul>
-        </details>
-      {{/if}}
-    </section>
-  {{/if}}
+  <pre data-role="sync-output" class="gmhub-output">{{output}}</pre>
 </div>
