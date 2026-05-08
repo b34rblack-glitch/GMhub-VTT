@@ -25,7 +25,7 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
 | Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.3.4` |
+| Current version | `0.3.5` |
 | Foundry compat | v11 minimum, v14 verified, v14 maximum |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
@@ -55,7 +55,7 @@ scripts/
   sync.js                # Push/pull orchestration; tiptapToHtml; flag-based ID reconciliation
   ui.js                  # Sync dialog, sidebar button, settings registration
 styles/
-  gmhub.css              # Module-specific UI styling
+  gmhub.css              # Module-specific UI styling (chips, dialogs, sync button)
 templates/               # Handlebars templates for the sync dialog
 lang/
   en.json                # i18n strings
@@ -69,7 +69,9 @@ This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1`
 
 - **`gmhub-app` owns the API surface.** Endpoint shapes, auth model, and token issuance all live there. Until Epic E ships, the contract is aspirational; this module ships against a stub server in the meantime.
 - **This module owns its consumption side and its scope.** What we sync (content types, push/pull semantics, conflict policy) is documented in `SCOPE.md`; the wire format mirrors what Epic E exposes.
-- **Wire format detail:** `entity.summary`, `note.body`, `session_plan.gm_notes`, `session_plan.gm_secrets` are Tiptap ProseMirror-JSON. The module renders to HTML on pull via `tiptapToHtml` in `sync.js`. Push is currently lossy — see §5.
+- **Wire format detail:**
+  - `entity.summary`, `note.body`, `session_plan.gm_notes`, `session_plan.gm_secrets` are Tiptap ProseMirror-JSON — rendered to HTML on pull via `tiptapToHtml` in `sync.js`. Push is currently lossy (sends HTML back, GMV-6).
+  - `session_plan.agenda` is opaque JSON (`z.unknown()` server-side); canonical Scene shape in `gmhub-app/src/components/session-prep/scene-list.tsx`: `{ id, title, notes, entities: [{id, name, entityType}], estimated_duration_min, order, ticked }`. `agendaHtml()` in `sync.js` renders title + duration + notes + entity chips.
 - Either side changes the contract → the other side's `docs/EPICS.md` gets a follow-up row.
 
 See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
@@ -78,15 +80,16 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 > **Update this section at the start of every new release.**
 
-`v0.3.4` is the v14 i18n hotfix that finally takes. v0.3.2/0.3.3 tried to fix the all-raw-keys symptom by manually fetching `lang/en.json` and `mergeObject`-ing the expanded form into `game.i18n.translations`; that didn't take in v14 (presumably the actual lookup target moved to a private store and the public property no longer round-trips). v0.3.4 stops mutating Foundry's store and instead **wraps `game.i18n.localize` and `game.i18n.format` directly** with a fallback to the manually-fetched flat dictionary. The original implementations are still called first; the wrapper only returns from our cache when Foundry signals "not found" (returns the raw key). Foundry's Handlebars `{{localize}}` helper goes through `game.i18n.localize`, so this single patch covers settings labels, dialog buttons, push-preview body strings, lifecycle confirmations — every i18n call site in this module's UI.
+`v0.3.5` is a small follow-up that closes the agenda-fidelity gap from v0.3.3: scenes carry an `entities: [{id, name, entityType}]` array (the per-scene "Link entity" tags from the web-app prep editor) and `agendaHtml()` was dropping it on the floor. Render now emits the linked entities as chip spans after the scene notes, with a stylesheet rule in `gmhub.css` to match the rounded-pill look of the web app. Drive-by: `_escapeHtml` applied to title/notes in agenda + pinned (was unescaped before — GM-trusted data, but free hardening), plus a CSS rule for the v0.3.3 `.gmhub-mention` spans that previously rendered unstyled. Round-trip via `FLAG_AGENDA_DATA` already preserves `entities` on push, so no API change needed.
 
 ## 5. Known Issues & Tech Debt
 
 | Priority | Issue | Notes |
 |---|---|---|
 | 🟠 High | Push is lossy on rich-text fields | Pull renders Tiptap JSON → HTML, but Push sends `page.text.content` (HTML) back to gmhub-app whose API expects Tiptap JSON. A round-trip Pull → edit in Foundry → Push will either 400 or corrupt the body. Fix needs either an HTML → Tiptap converter in this module or HTML acceptance on the gmhub-app side. Tracked as GMV-6. |
+| 🟡 Med | AgendaEditorDialog can't add/edit per-scene entity links | Existing scenes round-trip their `entities` array via the page flag, but the in-Foundry editor has no UI to attach or detach links. Adding a new scene in Foundry stores `entities: undefined` (treated as empty by the renderer + server). Tracked as GMV-7. |
 | 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog and editors are V1; migration to ApplicationV2 deferred to v0.4.0. |
-| 🟢 Low | Root cause of v14 lang auto-load failure unknown | Three releases of escalating workarounds (mergeObject → journal re-render → patched localize) before the symptom was fully suppressed. The underlying Foundry behaviour is undiagnosed; if v15 / a v14 patch release re-breaks this, revisit then. |
+| 🟢 Low | Root cause of v14 lang auto-load failure unknown | Three releases of escalating workarounds (mergeObject → journal re-render → patched localize) before the symptom was fully suppressed in v0.3.4. The underlying Foundry behaviour is undiagnosed; revisit if v15 / a v14 patch release re-breaks the workaround. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. Consider Quench or a stub Foundry environment if churn warrants it. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 
