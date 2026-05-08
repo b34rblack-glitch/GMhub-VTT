@@ -107,6 +107,12 @@ Hooks.once("init", () => {
 // cause is unclear (suspected v13/v14 change in module language-pack
 // auto-load); the manual fetch + mergeObject here is a no-op if the
 // auto-loader worked, and rescues the UI if it didn't.
+//
+// v0.3.3: re-render the journal directory after the merge so the sidebar
+// button label picks up the loaded strings. Foundry doesn't await async
+// i18nInit listeners, so renderJournalDirectory can fire before this fetch
+// resolves and bake the raw key into the button — forcing a re-render here
+// gives the synchronous localize() inside that hook a second pass.
 Hooks.once("i18nInit", async () => {
   try {
     const res = await fetch(`modules/${MODULE_ID}/lang/en.json`);
@@ -117,6 +123,9 @@ Hooks.once("i18nInit", async () => {
     const flat = await res.json();
     const expanded = foundry.utils.expandObject(flat);
     foundry.utils.mergeObject(game.i18n.translations, expanded, { inplace: true });
+    if (typeof ui !== "undefined" && ui?.journal?.render) {
+      ui.journal.render(false);
+    }
   } catch (err) {
     console.warn(`[${MODULE_ID}] manual lang load failed`, err);
   }
