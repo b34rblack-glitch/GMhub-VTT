@@ -83,7 +83,7 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 | Priority | Issue | Notes |
 |---|---|---|
-| 🟡 Med | Foundry v13 not supported | Module declares max compat v12. Bumping to v13 likely needs an audit of `JournalEntryPage` API + the journal sidebar context-menu hook. Tracked as GMV-4 in `docs/EPICS.md`. |
+| 🟡 Med | Foundry v13 runtime verification pending | Manifest now allows v13 install (max `"13"`); `verified` stays `"12"` until a GM walks `docs/integration-test.md` in a v13 world. Application V1 is deprecated in v13 (still functional); migration to ApplicationV2 deferred to v0.4.0. DMHUB-162. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. Consider Quench or a stub Foundry environment if churn warrants it. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 

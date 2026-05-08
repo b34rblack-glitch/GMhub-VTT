@@ -23,7 +23,7 @@
 | GMV-1 | Actor sync (5e sheets) | D&D 5e character sheets ↔ DMhub `player_characters`. Out of scope per current `SCOPE.md`; would require a scope amendment first. |
 | GMV-2 | Scene / map import | Push Foundry scenes as `campaign_maps` rows in DMhub. Out of scope per current `SCOPE.md`; would require a scope amendment first. |
 | GMV-3 | Webhook-driven live updates | Replace pull-on-demand with push notifications from `dmhub-app`. Out of scope per current `SCOPE.md` (manual-only); would require a scope amendment first. |
-| GMV-4 | Foundry v13 compatibility | Audit `JournalEntryPage` API + sidebar context-menu hook; bump `module.json#compatibility.maximum`. In scope. |
+| GMV-4 | Foundry v13 compatibility (verification) | `module.json#compatibility.maximum` bumped to v13 in 0.3.0; runtime verification in a real v13 world still pending (`verified` stays at `"12"` until a GM walks `docs/integration-test.md` against v13). DMHUB-162. |
 
 ## Upstream dependencies (in `dmhub-app`)
 

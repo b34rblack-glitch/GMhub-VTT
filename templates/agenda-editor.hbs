@@ -1,0 +1,72 @@
+<div class="gmhub-agenda-editor">
+  {{#if items.length}}
+    <ol class="gmhub-agenda-list">
+      {{#each items}}
+        <li class="gmhub-agenda-row">
+          {{#if ../isAgenda}}
+            <input type="text"
+              class="gmhub-agenda-title"
+              data-idx="{{this._idx}}" data-field="title"
+              placeholder="{{localize "GMHUB.Dialog.AgendaEditor.TitlePlaceholder"}}"
+              value="{{this.title}}" />
+            <input type="number" min="0" max="999"
+              class="gmhub-agenda-minutes"
+              data-idx="{{this._idx}}" data-field="estimated_duration_min"
+              placeholder="min"
+              value="{{this.estimated_duration_min}}" />
+            <textarea
+              class="gmhub-agenda-notes"
+              rows="2"
+              data-idx="{{this._idx}}" data-field="notes"
+              placeholder="{{localize "GMHUB.Dialog.AgendaEditor.NotesPlaceholder"}}">{{this.notes}}</textarea>
+          {{else}}
+            <select data-idx="{{this._idx}}" data-field="entity_type">
+              <option value="npc" {{#if (eq this.entity_type "npc")}}selected{{/if}}>npc</option>
+              <option value="location" {{#if (eq this.entity_type "location")}}selected{{/if}}>location</option>
+              <option value="faction" {{#if (eq this.entity_type "faction")}}selected{{/if}}>faction</option>
+              <option value="item" {{#if (eq this.entity_type "item")}}selected{{/if}}>item</option>
+              <option value="quest" {{#if (eq this.entity_type "quest")}}selected{{/if}}>quest</option>
+              <option value="lore" {{#if (eq this.entity_type "lore")}}selected{{/if}}>lore</option>
+            </select>
+            <input type="text"
+              class="gmhub-pinned-name"
+              data-idx="{{this._idx}}" data-field="name"
+              placeholder="{{localize "GMHUB.Dialog.AgendaEditor.PinnedNamePlaceholder"}}"
+              value="{{this.name}}" />
+            <input type="text"
+              class="gmhub-pinned-id"
+              data-idx="{{this._idx}}" data-field="entity_id"
+              placeholder="{{localize "GMHUB.Dialog.AgendaEditor.PinnedIdPlaceholder"}}"
+              value="{{this.entity_id}}" />
+          {{/if}}
+          <div class="gmhub-agenda-controls">
+            <button type="button" data-action="up" data-idx="{{this._idx}}" title="Move up">
+              <i class="fas fa-arrow-up"></i>
+            </button>
+            <button type="button" data-action="down" data-idx="{{this._idx}}" title="Move down">
+              <i class="fas fa-arrow-down"></i>
+            </button>
+            <button type="button" data-action="remove" data-idx="{{this._idx}}" title="Remove">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </li>
+      {{/each}}
+    </ol>
+  {{else}}
+    <p class="gmhub-empty-state">{{localize "GMHUB.Dialog.AgendaEditor.Empty"}}</p>
+  {{/if}}
+
+  <button type="button" data-action="add" class="gmhub-agenda-add">
+    <i class="fas fa-plus"></i> {{localize "GMHUB.Dialog.AgendaEditor.Add"}}
+  </button>
+
+  <footer class="gmhub-dialog-buttons">
+    <button type="button" data-action="cancel">
+      <i class="fas fa-times"></i> {{localize "GMHUB.Button.Cancel"}}
+    </button>
+    <button type="button" data-action="save">
+      <i class="fas fa-save"></i> {{localize "GMHUB.Dialog.AgendaEditor.Save"}}
+    </button>
+  </footer>
+</div>

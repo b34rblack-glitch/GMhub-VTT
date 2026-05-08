@@ -91,7 +91,7 @@ Hooks.once("init", () => {
 });
 
 Hooks.once("ready", () => {
-  const client = new GMhubClient({
+  const client = new GmhubClient({
     getBaseUrl: () => game.settings.get(MODULE_ID, "baseUrl"),
     getApiKey: () => game.settings.get(MODULE_ID, "apiKey")
   });

@@ -22,6 +22,109 @@
   margin-bottom: 8px;
 }
 
+.gmhub-sync .gmhub-lifecycle {
+  border: 1px solid var(--color-border-light-tertiary);
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.gmhub-sync .gmhub-lifecycle-state {
+  margin: 2px 0 6px;
+  font-size: 13px;
+}
+
+.gmhub-sync .gmhub-lifecycle-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gmhub-lifecycle-confirm-dialog .gmhub-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.gmhub-confirm-destructive {
+  background: var(--color-warning, #c0392b);
+  color: white;
+}
+
+.gmhub-push-preview-counts {
+  width: 100%;
+  margin: 8px 0;
+  border-collapse: collapse;
+}
+
+.gmhub-push-preview-counts th {
+  text-align: left;
+  padding: 4px 8px;
+  font-weight: 600;
+}
+
+.gmhub-push-preview-counts td {
+  padding: 4px 8px;
+  text-align: right;
+}
+
+.gmhub-push-preview-dialog .gmhub-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.gmhub-empty-state {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.gmhub-agenda-editor .gmhub-agenda-list {
+  list-style: decimal;
+  padding-left: 24px;
+  margin: 6px 0;
+}
+
+.gmhub-agenda-editor .gmhub-agenda-row {
+  display: grid;
+  grid-template-columns: 1fr 70px 30px;
+  gap: 6px;
+  margin-bottom: 8px;
+  align-items: start;
+}
+
+.gmhub-agenda-editor .gmhub-agenda-notes {
+  grid-column: 1 / 3;
+  width: 100%;
+  resize: vertical;
+}
+
+.gmhub-agenda-editor .gmhub-agenda-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  grid-column: 3;
+  grid-row: 1 / 3;
+}
+
+.gmhub-agenda-editor .gmhub-agenda-controls button {
+  width: 28px;
+  padding: 2px;
+}
+
+.gmhub-agenda-editor .gmhub-agenda-add {
+  margin: 4px 0 8px;
+}
+
+.gmhub-agenda-editor-dialog .gmhub-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
 .gmhub-sync .gmhub-status {
   background: rgba(0, 0, 0, 0.05);
   border-left: 3px solid var(--color-border-highlight);
