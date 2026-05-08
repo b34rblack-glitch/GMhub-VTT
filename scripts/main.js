@@ -9,6 +9,18 @@ import { openAgendaEditorForPage, PickSessionDialog, SyncDialog } from "./ui.js"
 
 export const MODULE_ID = "gmhub-vtt";
 
+// Re-render any open SyncDialog instance + the journal sidebar. Used as
+// the onChange callback for activeSessionId so the per-journal active
+// marker and the SyncDialog's lifecycle row both update the moment the
+// pointer flips, with no manual reopen required.
+function _refreshActiveSessionUI() {
+  if (typeof ui === "undefined") return;
+  ui.journal?.render?.(false);
+  for (const win of Object.values(ui.windows ?? {})) {
+    if (win?.constructor?.name === "SyncDialog") win.render?.(false);
+  }
+}
+
 Hooks.once("init", () => {
   game.settings.register(MODULE_ID, "baseUrl", {
     name: "GMHUB.Settings.BaseUrl.Name",
@@ -46,12 +58,17 @@ Hooks.once("init", () => {
     }
   });
 
-  // GMHUB-153 (E10) — set programmatically by the Pick Session dialog.
+  // Active-session pointer. Per SCOPE 0.4.0-α, this is no longer "the only
+  // session in Foundry" — it's just the pointer that the SyncDialog's
+  // lifecycle buttons (Start/Pause/Resume/End) target. PR 0.4.0-γ adds the
+  // per-journal "Set as active session" context-menu action that flips it.
+  // The onChange refresh keeps the sidebar marker + open SyncDialog in sync.
   game.settings.register(MODULE_ID, "activeSessionId", {
     scope: "world",
     config: false,
     type: String,
-    default: ""
+    default: "",
+    onChange: () => _refreshActiveSessionUI()
   });
 
   // GMHUB-153 (E10) — queue of quick-notes / edits captured during a brief
@@ -92,31 +109,12 @@ Hooks.once("init", () => {
     `modules/${MODULE_ID}/templates/agenda-editor.hbs`
   ]);
 
-  // Register a minimal `eq` helper for the agenda editor's <select> defaults.
-  // Module-namespaced via the loose convention of prefixing helper names is
-  // unnecessary here — Handlebars helpers are global, but `eq` is a benign,
-  // commonly-shared name that other modules also expect to exist.
   if (!Handlebars.helpers.eq) {
     Handlebars.registerHelper("eq", (a, b) => a === b);
   }
 });
 
-// v14 i18n compatibility shim. v0.3.1–0.3.3 surfaced raw `GMHUB.*` keys in
-// settings, dialogs, and template-rendered button labels even though
-// `lang/en.json` is correctly declared in `module.json` and ships in the
-// release zip. v0.3.2/0.3.3 attempted to fix it by manually fetching the
-// file and `mergeObject`-ing the expanded form into
-// `game.i18n.translations` — that didn't take, presumably because v14 has
-// moved the actual lookup target to a private store and the public
-// `translations` property no longer round-trips into it.
-//
-// v0.3.4 stops trying to mutate Foundry's internal store and instead
-// patches `game.i18n.localize` and `game.i18n.format` directly. Foundry's
-// Handlebars `{{localize}}` / `{{localizeKey}}` helpers call these methods,
-// so the override covers templates, settings labels, button text, and
-// every direct `game.i18n.localize("...")` call in this module's code.
-// The original implementations are still called first; we only fall back
-// to our cache when Foundry returns the raw key (its "not found" signal).
+// v14 i18n compatibility shim — see CLAUDE.md §4 (v0.3.4) for the trail.
 Hooks.once("i18nInit", async () => {
   try {
     const res = await fetch(`modules/${MODULE_ID}/lang/en.json`);
@@ -126,15 +124,11 @@ Hooks.once("i18nInit", async () => {
     }
     const flat = await res.json();
 
-    if (game.i18n.localize?.__gmhubPatched) {
-      // Defensive: avoid double-patching if i18nInit fires twice (hot reload).
-      return;
-    }
+    if (game.i18n.localize?.__gmhubPatched) return;
 
     const origLocalize = game.i18n.localize.bind(game.i18n);
     const patchedLocalize = function (key) {
       const fromOriginal = origLocalize(key);
-      // Foundry's localize returns the raw key when not found.
       if (fromOriginal !== key) return fromOriginal;
       return Object.prototype.hasOwnProperty.call(flat, key) ? flat[key] : key;
     };
@@ -154,12 +148,8 @@ Hooks.once("i18nInit", async () => {
     patchedFormat.__gmhubPatched = true;
     game.i18n.format = patchedFormat;
 
-    // Re-render any UI that already painted with raw keys before the patch
-    // landed. Settings panel + journal sidebar are the obvious ones; the
-    // dialogs render lazily on click so they don't need a kick.
     if (typeof ui !== "undefined") {
       ui.journal?.render?.(false);
-      // SettingsConfig is opened on demand; if it's open right now, kick it.
       const settingsApp = Object.values(ui.windows ?? {}).find(
         (w) => w?.constructor?.name === "SettingsConfig"
       );
@@ -190,23 +180,49 @@ Hooks.once("ready", () => {
 // now a raw HTMLElement, not a jQuery wrapper. The v11/v12 path used
 // html.find(...).append(button) which silently no-ops in v13+. Branch on
 // type so the same hook works on every supported version.
+//
+// 0.4.0-γ: also annotate the active session journal's sidebar entry with
+// a `gmhub-active-session` class so the GM can see which session the
+// lifecycle buttons currently target. CSS rule lives in styles/gmhub.css.
 Hooks.on("renderJournalDirectory", (app, html) => {
   if (!game.user.isGM) return;
   const root = (html instanceof HTMLElement) ? html : (html?.[0] ?? null);
   if (!root) return;
-  // v13+ exposes a .header-actions container holding the "Create Entry" /
-  // "Create Folder" buttons; v11/v12 nested it under .directory-header.
+
   const target = root.querySelector(
     ".directory-header .header-actions, .header-actions, .directory-header"
   );
-  if (!target) return;
-  if (target.querySelector(".gmhub-sync-button")) return; // re-render guard
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "gmhub-sync-button";
-  button.innerHTML = `<i class="fas fa-cloud"></i> ${game.i18n.localize("GMHUB.Button.OpenDialog")}`;
-  button.addEventListener("click", () => game.modules.get(MODULE_ID).api.openDialog());
-  target.appendChild(button);
+  if (target && !target.querySelector(".gmhub-sync-button")) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "gmhub-sync-button";
+    button.innerHTML = `<i class="fas fa-cloud"></i> ${game.i18n.localize("GMHUB.Button.OpenDialog")}`;
+    button.addEventListener("click", () => game.modules.get(MODULE_ID).api.openDialog());
+    target.appendChild(button);
+  }
+
+  // Active-session marker. Find the JournalEntry whose externalId matches
+  // the activeSessionId pointer, then scope the sidebar <li> by its
+  // document id (Foundry v11/12 used data-entry-id; v13+ uses
+  // data-document-id — query both).
+  const activeSessionId = game.settings.get(MODULE_ID, "activeSessionId");
+  // Clear any stale marker from a previous render before re-applying.
+  for (const el of root.querySelectorAll(".gmhub-active-session")) {
+    el.classList.remove("gmhub-active-session");
+  }
+  if (activeSessionId) {
+    const activeJournal = game.journal.contents.find(
+      (e) =>
+        e.getFlag(MODULE_ID, "kind") === "session" &&
+        e.getFlag(MODULE_ID, "externalId") === activeSessionId
+    );
+    if (activeJournal) {
+      const li = root.querySelector(
+        `[data-document-id="${activeJournal.id}"], [data-entry-id="${activeJournal.id}"]`
+      );
+      li?.classList.add("gmhub-active-session");
+    }
+  }
 });
 
 Hooks.on("getJournalEntryContextOptions", (html, options) => {
@@ -220,6 +236,34 @@ Hooks.on("getJournalEntryContextOptions", (html, options) => {
       const { sync } = game.modules.get(MODULE_ID).api;
       await sync.pushJournal(entry);
       ui.notifications.info(game.i18n.format("GMHUB.Notify.Pushed", { name: entry.name }));
+    }
+  });
+
+  // 0.4.0-γ — "Set as active session" appears only on session journals
+  // that aren't already the active one. Flips activeSessionId; the
+  // setting's onChange re-renders the sidebar marker + open SyncDialog.
+  options.push({
+    name: "GMHUB.Context.SetActiveSession",
+    icon: '<i class="fas fa-play-circle"></i>',
+    condition: (li) => {
+      const entryId = li?.data?.("documentId") ?? li?.data?.("entryId");
+      const entry = game.journal.get(entryId);
+      if (!entry) return false;
+      if (entry.getFlag(MODULE_ID, "kind") !== "session") return false;
+      const sessionId = entry.getFlag(MODULE_ID, "externalId");
+      if (!sessionId) return false;
+      return sessionId !== game.settings.get(MODULE_ID, "activeSessionId");
+    },
+    callback: async (li) => {
+      const entryId = li?.data?.("documentId") ?? li?.data?.("entryId");
+      const entry = game.journal.get(entryId);
+      if (!entry) return;
+      const sessionId = entry.getFlag(MODULE_ID, "externalId");
+      if (!sessionId) return;
+      await game.settings.set(MODULE_ID, "activeSessionId", sessionId);
+      ui.notifications.info(
+        game.i18n.format("GMHUB.Notify.SessionBound", { name: entry.name })
+      );
     }
   });
 });
@@ -272,23 +316,8 @@ Hooks.on("getJournalEntryPageContextOptions", (app, options) => {
 
 // On any GM-driven page update, mark dirty + (if change.ownership) reverse-
 // map Foundry's eye-icon toggle to the GMhub `visibility` flag so the next
-// Push propagates the player-visibility flip.
-//
-// Foundry's per-page eye icon in the Journal sidebar toggles
-// ownership.default between NONE (GM-only) and OBSERVER (campaign-visible);
-// gmhub-app's entity / note rows model the same concept as a `visibility`
-// string column with values gm_only / campaign. We listen for the
-// ownership change here, write the new value into the page's FLAG_VISIBILITY
-// flag, and let `_pushEntityPage` / `_pushNotePage` (which already read from
-// that flag) include it on the next Push.
-//
-// Session-plan pages (GM Notes / GM Secrets / Agenda / Pinned) have
-// GM-only-forever invariants that don't surface as a `visibility` field on
-// gmhub-app, so we skip the visibility mapping for that kind — toggling the
-// eye on those pages affects only the local Foundry world.
-//
-// `isUserChange` filters out hook re-entries from our own setFlag() calls
-// (those land as change.flags only) so we don't auto-push twice or recurse.
+// Push propagates the player-visibility flip. See CLAUDE.md §3 for the
+// visibility ride-along contract.
 Hooks.on("updateJournalEntryPage", async (page, change, _options, userId) => {
   if (game.user.id !== userId) return;
   if (!game.user.isGM) return;
