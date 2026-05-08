@@ -1,13 +1,13 @@
 # Integration Test — Epic E end-to-end roundtrip
 
-> Manual smoke test that exercises the full DMhub `/api/v1/*` ↔ Foundry
+> Manual smoke test that exercises the full GMhub `/api/v1/*` ↔ Foundry
 > module roundtrip. Runs before every release. The seventeen steps below
 > are the **cross-repo Epic-E definition-of-done**: changes on either side
 > that alter the contract require updating this checklist.
 
 ## Prerequisites
 
-- A DMhub deployment with **E1–E9 merged** to `main` (Vercel preview
+- A GMhub deployment with **E1–E9 merged** to `main` (Vercel preview
   works fine).
 - Foundry VTT v12 with the `dnd5e` system ≥ 3.0.0.
 - A throwaway test user / campaign — this exercises destructive flows
@@ -15,7 +15,7 @@
 
 ## Setup
 
-1. **Sign up** at the DMhub deployment. Verify email if required.
+1. **Sign up** at the GMhub deployment. Verify email if required.
 2. **Create a campaign** (`/campaigns/new`). Note the UUID from the URL.
 3. **Create a session** in Prep state (`/campaigns/{id}/sessions` →
    "+ New session").
@@ -27,8 +27,8 @@
    from the latest GitHub Release and unpack it into
    `$FOUNDRY_DATA/modules/gmhub-vtt`, or use Foundry's "Install Module
    from URL" with the manifest URL from the Release.
-6. **Module Settings**: paste `baseUrl` (the DMhub deployment URL),
-   `apiKey` (the `dmhub_pat_…` token), `campaignId` (the UUID from step 2).
+6. **Module Settings**: paste `baseUrl` (the GMhub deployment URL),
+   `apiKey` (the `gmhub_pat_…` token), `campaignId` (the UUID from step 2).
 
 ## Connection
 
@@ -49,7 +49,7 @@
    Foundry sidebar (`NPCs`, `Locations`, `Factions`, `Items`, `Quests`,
    `Lore`), plus a `Notes` journal and a `Session: <session title>`
    journal.
-10. **Open one entity that's `gm_only`** in DMhub. Open the corresponding
+10. **Open one entity that's `gm_only`** in GMhub. Open the corresponding
     page in the Foundry kind-journal. Switch to a non-GM Foundry login
     (or use the "View as player" preview) — the page should not appear
     in the journal sidebar.
@@ -69,11 +69,11 @@
     page macro, or trigger via the future Reveal UI).
 16. **Sync Dialog → Push**. Expect `pendingPushQueue` to drain (the
     quick note is consumed); the entity edit and reveal flip mirror to
-    DMhub. Verify on DMhub:
+    GMhub. Verify on GMhub:
     - `GET /api/v1/campaigns/{id}/entities/{externalId}` returns the
       edited summary.
     - `GET /api/v1/campaigns/{id}/sessions/{sessionId}/quick-notes` (or
-      the session detail page on DMhub) shows the captured quick note.
+      the session detail page on GMhub) shows the captured quick note.
     - The reveal banner / `revealed_at` timestamp is set.
 
 ## Lifecycle
@@ -89,14 +89,14 @@
     The 409 is the `withApiError` mapping of Prisma's P2002 from the
     `sessions(campaign_id) WHERE ended_at IS NULL` partial unique index.
 18. **End the session from Foundry** via the lifecycle action. Verify
-    `ended_at` is now populated on DMhub.
+    `ended_at` is now populated on GMhub.
 
 ## Failure modes
 
-19. **Revoke the token** in DMhub (`/account/api-tokens` → Revoke). Click
+19. **Revoke the token** in GMhub (`/account/api-tokens` → Revoke). Click
     Push again in Foundry. Expect:
 
-    > DMhub rejected the token. Mint a new one at `/account/api-tokens`
+    > GMhub rejected the token. Mint a new one at `/account/api-tokens`
     > and paste it into Module Settings.
 
 20. **Mint a token without `sessions:secrets`** and paste it. Edit the
@@ -112,7 +112,7 @@
 When the seventeen steps pass, record in the PR description:
 
 ```
-Integration test run by <name> on <date> against <DMhub URL>.
+Integration test run by <name> on <date> against <GMhub URL>.
 Module: v<x.y.z>, Foundry: v12.<patch>, dnd5e: <version>.
 All steps passed.
 ```

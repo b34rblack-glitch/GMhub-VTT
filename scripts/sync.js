@@ -1,6 +1,6 @@
-// GMhub VTT Bridge — Pull/Push orchestration (DMHUB-155 / E12).
+// GMhub VTT Bridge — Pull/Push orchestration (GMHUB-155 / E12).
 //
-// Maps DMhub content to Foundry's journal model per GMhub-VTT/SCOPE.md
+// Maps GMhub content to Foundry's journal model per GMhub-VTT/SCOPE.md
 // §"Foundry-side representation":
 //
 //   entities (NPCs, Locations, Factions, Items, Quests, Lore)
@@ -14,7 +14,7 @@
 //        Pinned.
 //
 // Conflict policy is direction-wins (per SCOPE): Pull overwrites Foundry,
-// Push overwrites DMhub. No merge, no per-field reconciliation.
+// Push overwrites GMhub. No merge, no per-field reconciliation.
 //
 // Stable IDs travel via flags.gmhub-vtt.externalId on every synced page.
 // Re-syncs key off the flag; we never look up by name.
@@ -27,6 +27,11 @@ const FLAG_VISIBILITY = "visibility";
 const FLAG_REVEALED_AT = "revealedAt";
 const FLAG_DIRTY = "dirty";
 const FLAG_ENTITY_TYPE = "entityType";
+// Structured payloads stashed alongside the rendered HTML on agenda/pinned
+// session-plan pages, so AgendaEditorDialog can round-trip edits back to the
+// API shape on push. (GMHUB-161)
+const FLAG_AGENDA_DATA = "agendaItems";
+const FLAG_PINNED_DATA = "pinnedRefs";
 
 const KIND_JOURNAL_NAMES = {
   npc: "NPCs",
@@ -64,7 +69,7 @@ function gmUserId() {
   return game.users.find((u) => u.isGM)?.id ?? game.user.id;
 }
 
-// Map DMhub four-value visibility → Foundry page-level ownership map.
+// Map GMhub four-value visibility → Foundry page-level ownership map.
 // gm_secrets is treated separately by callers (always pinned to GM-only).
 export function entityVisibilityToOwnership(visibility) {
   const { NONE, OBSERVER, OWNER } = ownershipLevels();
@@ -78,6 +83,24 @@ export function entityVisibilityToOwnership(visibility) {
     default:
       return { default: OBSERVER, [gmId]: OWNER };
   }
+}
+
+export const SESSION_PLAN_FLAGS = {
+  agenda: FLAG_AGENDA_DATA,
+  pinned: FLAG_PINNED_DATA
+};
+
+export const SESSION_PLAN_PAGE_NAMES = {
+  agenda: SESSION_PAGE_AGENDA,
+  pinned: SESSION_PAGE_PINNED
+};
+
+export function renderAgendaHtml(agenda) {
+  return agendaHtml(agenda);
+}
+
+export function renderPinnedHtml(pinned) {
+  return pinnedHtml(pinned);
 }
 
 function pinnedHtml(pinned) {
@@ -269,7 +292,13 @@ export class SyncService {
           type: "text",
           text: { content: agendaHtml(plan.agenda), format: 1 },
           ownership: gmOnly,
-          flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:agenda`, [FLAG_DIRTY]: false } }
+          flags: {
+            [MODULE_ID]: {
+              [FLAG_EXTERNAL_ID]: `${activeSessionId}:agenda`,
+              [FLAG_DIRTY]: false,
+              [FLAG_AGENDA_DATA]: Array.isArray(plan.agenda) ? plan.agenda : []
+            }
+          }
         });
         // GM Secrets is included only when the token's scope permitted it
         // (the server omits the field otherwise — absence is the signal).
@@ -287,7 +316,13 @@ export class SyncService {
           type: "text",
           text: { content: pinnedHtml(plan.pinned), format: 1 },
           ownership: gmOnly,
-          flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:pinned`, [FLAG_DIRTY]: false } }
+          flags: {
+            [MODULE_ID]: {
+              [FLAG_EXTERNAL_ID]: `${activeSessionId}:pinned`,
+              [FLAG_DIRTY]: false,
+              [FLAG_PINNED_DATA]: Array.isArray(plan.pinned) ? plan.pinned : []
+            }
+          }
         });
         result.pulled.sessionPlan = true;
       } catch (err) {
@@ -418,8 +453,18 @@ export class SyncService {
       // it up so E13 can toast the friendly error.
       partial.gm_secrets = secrets.text?.content ?? "";
     }
-    // We don't push agenda or pinned today — they're rendered HTML on pull;
-    // round-tripping needs a structured editor (out of scope for v1).
+    // Agenda / Pinned: round-tripped via structured page flags written by
+    // AgendaEditorDialog (GMHUB-161). The rendered HTML is regenerated on
+    // both pull and on save in the editor; the flag is the source of truth
+    // for push.
+    const agendaPage = byName.get(SESSION_PAGE_AGENDA);
+    if (agendaPage && agendaPage.getFlag(MODULE_ID, FLAG_DIRTY)) {
+      partial.agenda = agendaPage.getFlag(MODULE_ID, FLAG_AGENDA_DATA) ?? [];
+    }
+    const pinnedPage = byName.get(SESSION_PAGE_PINNED);
+    if (pinnedPage && pinnedPage.getFlag(MODULE_ID, FLAG_DIRTY)) {
+      partial.pinned = pinnedPage.getFlag(MODULE_ID, FLAG_PINNED_DATA) ?? [];
+    }
 
     if (Object.keys(partial).length === 0) return;
 
@@ -428,6 +473,12 @@ export class SyncService {
       if (gmNotes) await gmNotes.setFlag(MODULE_ID, FLAG_DIRTY, false);
       if (secrets && partial.gm_secrets !== undefined) {
         await secrets.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      }
+      if (agendaPage && partial.agenda !== undefined) {
+        await agendaPage.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      }
+      if (pinnedPage && partial.pinned !== undefined) {
+        await pinnedPage.setFlag(MODULE_ID, FLAG_DIRTY, false);
       }
       result.pushed.sessionPlan = true;
     } catch (err) {
@@ -438,6 +489,88 @@ export class SyncService {
         body: err.body ?? null
       });
     }
+  }
+
+  // Dry-run classification of what pushAll() would do, without making any
+  // API calls. Backs the Push preview dialog (GMHUB-160). A page is "create"
+  // if it carries no externalId flag, "update" if it has the flag AND is
+  // dirty; pages clean of dirty are skipped (existing pushAll behaviour
+  // re-uploads them, but the preview classifies by intent so the GM sees
+  // only the meaningful diff).
+  previewPush() {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) return { error: "no_campaign_bound" };
+    const activeSessionId = game.settings.get(MODULE_ID, "activeSessionId");
+
+    const preview = {
+      entities: { create: [], update: [] },
+      notes: { create: [], update: [] },
+      sessionPlan: { gmNotes: false, gmSecrets: false, agenda: false, pinned: false },
+      quickNotes: 0,
+      total: 0
+    };
+
+    for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
+      const journal = game.journal.contents.find(
+        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
+      );
+      if (!journal) continue;
+      for (const page of journal.pages.contents) {
+        if (page.type !== "text") continue;
+        const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+        const dirty = page.getFlag(MODULE_ID, FLAG_DIRTY);
+        if (!externalId) {
+          preview.entities.create.push({ name: page.name, kind });
+        } else if (dirty) {
+          preview.entities.update.push({ name: page.name, kind });
+        }
+      }
+    }
+
+    const notesJournal = game.journal.contents.find(
+      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes"
+    );
+    if (notesJournal) {
+      for (const page of notesJournal.pages.contents) {
+        if (page.type !== "text") continue;
+        const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+        const dirty = page.getFlag(MODULE_ID, FLAG_DIRTY);
+        if (!externalId) {
+          preview.notes.create.push({ name: page.name });
+        } else if (dirty) {
+          preview.notes.update.push({ name: page.name });
+        }
+      }
+    }
+
+    if (activeSessionId) {
+      const sessionJournal = game.journal.contents.find(
+        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "session"
+      );
+      if (sessionJournal) {
+        for (const page of sessionJournal.pages.contents) {
+          if (!page.getFlag(MODULE_ID, FLAG_DIRTY)) continue;
+          if (page.name === SESSION_PAGE_GM_NOTES) preview.sessionPlan.gmNotes = true;
+          else if (page.name === SESSION_PAGE_SECRETS) preview.sessionPlan.gmSecrets = true;
+          else if (page.name === SESSION_PAGE_AGENDA) preview.sessionPlan.agenda = true;
+          else if (page.name === SESSION_PAGE_PINNED) preview.sessionPlan.pinned = true;
+        }
+      }
+    }
+
+    const queue = game.settings.get(MODULE_ID, "pendingPushQueue") ?? [];
+    preview.quickNotes = queue.length;
+
+    preview.total =
+      preview.entities.create.length + preview.entities.update.length +
+      preview.notes.create.length + preview.notes.update.length +
+      (preview.sessionPlan.gmNotes ? 1 : 0) +
+      (preview.sessionPlan.gmSecrets ? 1 : 0) +
+      (preview.sessionPlan.agenda ? 1 : 0) +
+      (preview.sessionPlan.pinned ? 1 : 0) +
+      preview.quickNotes;
+
+    return preview;
   }
 
   async pushAll() {
@@ -492,7 +625,7 @@ export class SyncService {
     return result;
   }
 
-  // Push a single JournalEntry (the "Push to DMhub" context-menu action in
+  // Push a single JournalEntry (the "Push to GMhub" context-menu action in
   // main.js). Maps to the same per-page upserts pushAll does, scoped to one
   // entry. Entry must carry flags.gmhub-vtt.kind so we know what to do with it.
   async pushOne(entry) {
@@ -520,7 +653,7 @@ export class SyncService {
       if (sessionId) await this._pushSessionPlan(campaignId, sessionId, result);
     } else {
       // Unknown / unflagged entry — don't guess.
-      throw new Error("entry_not_bound_to_dmhub");
+      throw new Error("entry_not_bound_to_gmhub");
     }
     return result;
   }

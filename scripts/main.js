@@ -3,9 +3,9 @@
 // Hook discipline: register all hooks here in init/ready blocks, per
 // CLAUDE.md §6. Other files only export classes/functions.
 
-import { GMhubClient } from "./api-client.js";
+import { GmhubClient } from "./api-client.js";
 import { SyncService } from "./sync.js";
-import { PickSessionDialog, SyncDialog } from "./ui.js";
+import { openAgendaEditorForPage, PickSessionDialog, SyncDialog } from "./ui.js";
 
 export const MODULE_ID = "gmhub-vtt";
 
@@ -28,7 +28,7 @@ Hooks.once("init", () => {
     default: ""
   });
 
-  // DMHUB-153 (E10) — bind the Foundry world to a single DMhub campaign.
+  // GMHUB-153 (E10) — bind the Foundry world to a single GMhub campaign.
   // Per GMhub-VTT SCOPE: 1 world ↔ 1 campaign, set once. Clearing campaignId
   // also clears activeSessionId so we never sync a stale session pin.
   game.settings.register(MODULE_ID, "campaignId", {
@@ -46,7 +46,7 @@ Hooks.once("init", () => {
     }
   });
 
-  // DMHUB-153 (E10) — set programmatically by the Pick Session dialog.
+  // GMHUB-153 (E10) — set programmatically by the Pick Session dialog.
   game.settings.register(MODULE_ID, "activeSessionId", {
     scope: "world",
     config: false,
@@ -54,7 +54,7 @@ Hooks.once("init", () => {
     default: ""
   });
 
-  // DMHUB-153 (E10) — queue of quick-notes / edits captured during a brief
+  // GMHUB-153 (E10) — queue of quick-notes / edits captured during a brief
   // network blip. Per GMhub-VTT SCOPE §Behaviour contracts "Quick notes are
   // queued in Foundry world flags so a brief network blip doesn't lose them."
   // Drained on the next successful Push.
@@ -86,8 +86,19 @@ Hooks.once("init", () => {
   loadTemplates([
     `modules/${MODULE_ID}/templates/sync-dialog.hbs`,
     `modules/${MODULE_ID}/templates/pick-session.hbs`,
-    `modules/${MODULE_ID}/templates/confirm-overwrite.hbs`
+    `modules/${MODULE_ID}/templates/confirm-overwrite.hbs`,
+    `modules/${MODULE_ID}/templates/lifecycle-confirm.hbs`,
+    `modules/${MODULE_ID}/templates/push-preview.hbs`,
+    `modules/${MODULE_ID}/templates/agenda-editor.hbs`
   ]);
+
+  // Register a minimal `eq` helper for the agenda editor's <select> defaults.
+  // Module-namespaced via the loose convention of prefixing helper names is
+  // unnecessary here — Handlebars helpers are global, but `eq` is a benign,
+  // commonly-shared name that other modules also expect to exist.
+  if (!Handlebars.helpers.eq) {
+    Handlebars.registerHelper("eq", (a, b) => a === b);
+  }
 });
 
 Hooks.once("ready", () => {
@@ -101,7 +112,8 @@ Hooks.once("ready", () => {
     client,
     sync,
     openDialog: () => new SyncDialog(sync).render(true),
-    openPickSession: () => new PickSessionDialog(client).render(true)
+    openPickSession: () => new PickSessionDialog(client).render(true),
+    openAgendaEditor: (page) => openAgendaEditorForPage(page)
   };
 });
 
@@ -127,7 +139,7 @@ Hooks.on("getJournalEntryContextOptions", (html, options) => {
   });
 });
 
-// DMHUB-155 (E12). On any GM-driven journal edit, mark the entry dirty so
+// GMHUB-155 (E12). On any GM-driven journal edit, mark the entry dirty so
 // the next manual Pull warns + the next manual Push picks it up. Auto-push
 // is off by default per GMhub-VTT SCOPE "Manual sync only" — only call
 // pushOne when the GM has opted in via the autoPushOnUpdate setting.
@@ -146,6 +158,31 @@ Hooks.on("updateJournalEntry", async (entry, _change, _options, userId) => {
   } catch (err) {
     console.error("[gmhub-vtt] auto-push failed", err);
   }
+});
+
+// GMHUB-161 — surface "Edit Agenda / Edit Pinned" on the page right-click
+// context menu inside a session journal's table of contents. The hook fires
+// in Foundry v12 when the user right-clicks a page row in the TOC; in
+// earlier or later versions where the hook name has shifted, the GM can
+// still call game.modules.get("gmhub-vtt").api.openAgendaEditor(page).
+Hooks.on("getJournalEntryPageContextOptions", (app, options) => {
+  if (!game.user.isGM) return;
+  options.push({
+    name: "GMHUB.Context.EditAgenda",
+    icon: '<i class="fas fa-list-ol"></i>',
+    condition: (li) => {
+      const pageId = li?.data?.("page-id") ?? li?.data?.("pageId");
+      const page = app?.object?.pages?.get?.(pageId);
+      if (!page) return false;
+      if (page.parent?.getFlag(MODULE_ID, "kind") !== "session") return false;
+      return page.name === "Agenda" || page.name === "Pinned";
+    },
+    callback: (li) => {
+      const pageId = li?.data?.("page-id") ?? li?.data?.("pageId");
+      const page = app?.object?.pages?.get?.(pageId);
+      openAgendaEditorForPage(page);
+    }
+  });
 });
 
 Hooks.on("updateJournalEntryPage", async (page, _change, _options, userId) => {

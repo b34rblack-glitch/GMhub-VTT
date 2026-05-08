@@ -1,6 +1,6 @@
-// GMhub VTT Bridge — friendly error toasts (DMHUB-156 / E13).
+// GMhub VTT Bridge — friendly error toasts (GMHUB-156 / E13).
 //
-// Centralizes how the module renders DMhub /api/v1 errors to the GM. Every
+// Centralizes how the module renders GMhub /api/v1 errors to the GM. Every
 // fetch call in sync.js + ui.js routes through safeCall so a 401/403/409/429
 // becomes an actionable ui.notifications message instead of a raw exception
 // in the console.

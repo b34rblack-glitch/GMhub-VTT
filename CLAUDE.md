@@ -1,6 +1,6 @@
 # GMhub-VTT — Claude Code Context
 
-> Foundry VTT module that two-way-syncs Journal Entries with the DMhub web app.
+> Foundry VTT module that two-way-syncs Journal Entries with the GMhub web app.
 > Keep this file under 140 lines. Update §4 "Current Focus" at the start of each
 > new release. Everything else is stable reference.
 
@@ -12,7 +12,7 @@ Five files are the canonical documentation. Keep them in sync on every PR that s
 2. **`SCOPE.md`** — durable product scope and intent. Mission, workflow position, in-scope / out-of-scope, behaviour contracts, open design decisions. **Edit only when scope itself changes** — additions, removals, behavioural shifts. README and `docs/EPICS.md` reference this; do not duplicate scope material there.
 3. **`docs/EPICS.md`** — append-only shipped-feature log + open backlog. **Add a row when any feature ships;** never edit historical rows.
 4. **`CLAUDE.md`** *(this file)* — update §4 "Current Focus" at release start; update §5 "Known Issues" when you fix or add tech debt.
-5. **`docs/SISTER_REPO.md`** — only edit when the cross-repo contract with `dmhub-app` changes (auth model, who owns the API surface, etc.).
+5. **`docs/SISTER_REPO.md`** — only edit when the cross-repo contract with `gmhub-app` changes (auth model, who owns the API surface, etc.).
 
 **Do not create new top-level Markdown files** beyond these five. (No `AUDIT_REPORT.md`, no `audits/` snapshots, no `NOTES.md`.) One-shot reports go in PR descriptions.
 
@@ -23,10 +23,10 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Key | Value |
 |---|---|
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
-| Sister repo | `github.com/b34rblack-glitch/DMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
+| Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.2.0` |
-| Foundry compat | v11 minimum, v12 verified, v12 maximum |
+| Current version | `0.3.0` |
+| Foundry compat | v11 minimum, v12 verified, v13 maximum (v13 install allowed; runtime verification pending) |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
 
@@ -39,7 +39,7 @@ README.md                # Landing page (vision + install + status)
 SCOPE.md                 # Durable product scope/intent (read first)
 CLAUDE.md                # This file (agent guardrails)
 docs/EPICS.md            # Append-only shipped-feature log + backlog
-docs/SISTER_REPO.md      # Cross-repo contract with dmhub-app
+docs/SISTER_REPO.md      # Cross-repo contract with gmhub-app
 .github/
   pull_request_template.md  # PR documentation-contract reminder
   CODEOWNERS                # Default reviewer assignment
@@ -63,11 +63,11 @@ lang/
 
 No build step — the module is plain ES modules loaded by Foundry directly.
 
-## 3. Cross-repo contract (with `dmhub-app`)
+## 3. Cross-repo contract (with `gmhub-app`)
 
-This module is coupled to `dmhub-app` through exactly one surface: the `/api/v1` REST endpoints exposed under **Epic E — Public API & Foundry Foundations** in `dmhub-app`.
+This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1` REST endpoints exposed under **Epic E — Public API & Foundry Foundations** in `gmhub-app`.
 
-- **`dmhub-app` owns the API surface.** Endpoint shapes, auth model, and token issuance all live there. Until Epic E ships, the contract is aspirational; this module ships against a stub server in the meantime.
+- **`gmhub-app` owns the API surface.** Endpoint shapes, auth model, and token issuance all live there. Until Epic E ships, the contract is aspirational; this module ships against a stub server in the meantime.
 - **This module owns its consumption side and its scope.** What we sync (content types, push/pull semantics, conflict policy) is documented in `SCOPE.md`; the wire format mirrors what Epic E exposes.
 - Either side changes the contract → the other side's `docs/EPICS.md` gets a follow-up row.
 
@@ -77,13 +77,13 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 > **Update this section at the start of every new release.**
 
-`v0.2.0` consumes the now-shipped `dmhub-app` Epic E `/api/v1/*` surface. The module mirrors `SCOPE.md` §"Foundry-side representation" exactly — six entity-kind journals + a Notes journal + a per-active-session journal whose GM Secrets page is page-level GM-only-forever. `pullAll` / `pushAll` cover entities + notes + plan + quick-notes + lifecycle; `pendingPushQueue` survives offline blips. CI release workflow ships `module.zip` + versioned `module.json` on every `v*` tag. The cross-repo gate is the seventeen-step checklist in `docs/integration-test.md`.
+`v0.3.0` closes the four feature gaps that v0.2.0 left open so a GM can run a full session lifecycle without leaving Foundry: Start/Pause/Resume/End buttons in `SyncDialog` (GMHUB-159), a push diff preview dialog that confirms before any API write (GMHUB-160), a structured Agenda + Pinned editor that round-trips edits via page flags (GMHUB-161), and a `module.json#compatibility.maximum` bump to `"13"` so the module installs in Foundry v13 (GMHUB-162; runtime `verified` stays at `"12"` until the integration test runs against v13). All shipped under GMHUB-158 epic. The cross-repo gate is still `docs/integration-test.md` (now exercising 21/21 steps including lifecycle).
 
 ## 5. Known Issues & Tech Debt
 
 | Priority | Issue | Notes |
 |---|---|---|
-| 🟡 Med | Foundry v13 runtime verification pending | Manifest now allows v13 install (max `"13"`); `verified` stays `"12"` until a GM walks `docs/integration-test.md` in a v13 world. Application V1 is deprecated in v13 (still functional); migration to ApplicationV2 deferred to v0.4.0. DMHUB-162. |
+| 🟡 Med | Foundry v13 runtime verification pending | Manifest now allows v13 install (max `"13"`); `verified` stays `"12"` until a GM walks `docs/integration-test.md` in a v13 world. Application V1 is deprecated in v13 (still functional); migration to ApplicationV2 deferred to v0.4.0. GMHUB-162. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. Consider Quench or a stub Foundry environment if churn warrants it. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 
@@ -116,5 +116,5 @@ git clone https://github.com/b34rblack-glitch/GMhub-VTT.git "$FOUNDRY_DATA/modul
 - Always read `module.json` first when editing — the `esmodules`/`styles`/`languages` arrays gate what Foundry loads.
 - **Read `SCOPE.md` before agreeing to a feature.** If a request would cross an out-of-scope line, surface that explicitly rather than implementing.
 - Foundry's API is undocumented in `node_modules`; reference docs live at https://foundryvtt.com/api/v12/ — fetch live if needed.
-- When `dmhub-app` changes the `/api/v1` surface (Epic E), this module's `api-client.js` follows. Bump `module.json#version` for any consumer-facing change.
+- When `gmhub-app` changes the `/api/v1` surface (Epic E), this module's `api-client.js` follows. Bump `module.json#version` for any consumer-facing change.
 - **Don't create `AUDIT_REPORT.md` or `audits/` files.** See §0 Documentation Contract — audit findings go in PR descriptions, not committed Markdown.
