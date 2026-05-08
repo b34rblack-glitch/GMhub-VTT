@@ -40,6 +40,19 @@
   "GMHUB.Notify.Pushed": "Pushed \"{name}\" to DMhub",
   "GMHUB.Notify.SessionBound": "Bound active session: {name}",
   "GMHUB.Notify.NotImplemented": "Not yet implemented — wires up in a follow-up commit.",
+  "GMHUB.Notify.Pinging": "Pinging DMhub…",
+  "GMHUB.Notify.PingDone": "Connection OK",
+  "GMHUB.Notify.PingFailed": "Connection failed",
+  "GMHUB.Notify.PingOk": "Connected as user {userId}",
+  "GMHUB.Notify.Pulling": "Pulling from DMhub…",
+  "GMHUB.Notify.PullDone": "Pull complete",
+  "GMHUB.Notify.PullFailed": "Pull failed",
+  "GMHUB.Notify.PullCancelled": "Pull cancelled",
+  "GMHUB.Notify.Pushing": "Pushing to DMhub…",
+  "GMHUB.Notify.PushDone": "Push complete",
+  "GMHUB.Notify.PushFailed": "Push failed",
+
+  "GMHUB.Warn.NoSessionsSecrets": "Token is missing the sessions:secrets scope — GM Secrets won't sync.",
 
   "GMHUB.Scope.campaigns:read": "Read your campaigns.",
   "GMHUB.Scope.entities:read": "Read NPCs, locations, factions, items, quests, lore.",
@@ -51,9 +64,13 @@
   "GMHUB.Scope.sessions:secrets": "Read AND write the GM Secrets page on a session plan. GM-only forever.",
 
   "GMHUB.Error.401": "DMhub rejected the token. Mint a new one at /account/api-tokens and paste it into Module Settings.",
-  "GMHUB.Error.403": "This token is missing the {scope} scope. Mint a new token with that scope checked.",
+  "GMHUB.Error.401.MissingCredentials": "Set your DMhub API key in Module Settings.",
+  "GMHUB.Error.403": "Your DMhub token is missing the '{scope}' permission. Reissue with that scope checked.",
+  "GMHUB.Error.403.Generic": "DMhub refused the request. Check that the token has the right scopes.",
   "GMHUB.Error.409.single_active_session": "Another session is already running in this campaign. End it before starting a new one.",
-  "GMHUB.Error.409.session_ended": "This session has ended; you can't capture quick-notes against it.",
-  "GMHUB.Error.429": "Hit DMhub's rate limit. Try again in {seconds} seconds.",
-  "GMHUB.Error.5xx": "DMhub returned a server error. Try again shortly; if it persists, check status.gmhub.app."
+  "GMHUB.Error.409.session_ended": "That session has ended. Pick a different session.",
+  "GMHUB.Error.409.Generic": "DMhub flagged a conflict on that operation.",
+  "GMHUB.Error.429": "DMhub rate limit hit. Try again in {seconds}s.",
+  "GMHUB.Error.5xx": "DMhub server is having trouble. Try again in a minute.",
+  "GMHUB.Error.Generic": "Sync failed: {message}"
 }

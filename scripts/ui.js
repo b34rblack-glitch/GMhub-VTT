@@ -15,6 +15,7 @@
 // Test Connection wiring lands in E13. Scope of E10 is scaffolding only.
 
 import { MODULE_ID } from "./main.js";
+import { describePingFailure, describePingResult, safeCall } from "./error-toaster.js";
 
 function statusLabel(session) {
   if (session.ended_at) return "ended";
@@ -71,17 +72,83 @@ export class SyncDialog extends Application {
       picker.render(true);
     });
 
-    html.find('[data-action="ping"]').on("click", () => {
-      // E13 lands the real wiring; for E10 scope, just give a placeholder.
-      this._setStatus(game.i18n.localize("GMHUB.Notify.NotImplemented"));
+    html.find('[data-action="ping"]').on("click", async () => {
+      this._setStatus(game.i18n.localize("GMHUB.Notify.Pinging"));
+      try {
+        const principal = await safeCall(() => this.sync.client.ping());
+        this._setStatus(
+          game.i18n.localize("GMHUB.Notify.PingDone"),
+          describePingResult(principal)
+        );
+      } catch (err) {
+        this._setStatus(
+          game.i18n.localize("GMHUB.Notify.PingFailed"),
+          describePingFailure(err)
+        );
+      }
     });
 
-    html.find('[data-action="pull"]').on("click", () => {
-      this._setStatus(game.i18n.localize("GMHUB.Notify.NotImplemented"));
+    html.find('[data-action="pull"]').on("click", async () => {
+      this._setStatus(game.i18n.localize("GMHUB.Notify.Pulling"));
+      try {
+        const result = await safeCall(() =>
+          this.sync.pullAll({
+            confirmOverwrite: (dirtyEntries) =>
+              new Promise((resolve) => {
+                let resolved = false;
+                const dialog = new ConfirmOverwriteDialog({
+                  dirtyEntries: dirtyEntries.map((e) => ({ name: e.name })),
+                  onConfirm: () => {
+                    resolved = true;
+                    resolve(true);
+                  }
+                });
+                dialog.options.callbacks = dialog.options.callbacks ?? {};
+                const origClose = dialog.close.bind(dialog);
+                dialog.close = async (...args) => {
+                  if (!resolved) resolve(false);
+                  return origClose(...args);
+                };
+                dialog.render(true);
+              })
+          })
+        );
+        if (result?.cancelled) {
+          this._setStatus(game.i18n.localize("GMHUB.Notify.PullCancelled"));
+          return;
+        }
+        const r = result?.pulled ?? { entities: 0, notes: 0, sessionPlan: false };
+        const summary = `entities: ${r.entities}, notes: ${r.notes}, session plan: ${r.sessionPlan ? "yes" : "no"}`;
+        const errs = (result?.errors ?? []).map((e) => `${e.name}: ${e.message}`).join("\n");
+        this._setStatus(
+          game.i18n.localize("GMHUB.Notify.PullDone"),
+          `${summary}${errs ? "\n\n" + errs : ""}`
+        );
+      } catch (err) {
+        this._setStatus(
+          game.i18n.localize("GMHUB.Notify.PullFailed"),
+          err.message ?? ""
+        );
+      }
     });
 
-    html.find('[data-action="push"]').on("click", () => {
-      this._setStatus(game.i18n.localize("GMHUB.Notify.NotImplemented"));
+    html.find('[data-action="push"]').on("click", async () => {
+      this._setStatus(game.i18n.localize("GMHUB.Notify.Pushing"));
+      try {
+        const result = await safeCall(() => this.sync.pushAll());
+        const p = result?.pushed ?? { entities: 0, notes: 0, sessionPlan: false, quickNotes: 0 };
+        const summary = `entities: ${p.entities}, notes: ${p.notes}, session plan: ${p.sessionPlan ? "yes" : "no"}, quick notes: ${p.quickNotes}`;
+        const errs = (result?.errors ?? []).map((e) => `${e.name}: ${e.message}`).join("\n");
+        this._setStatus(
+          `${game.i18n.localize("GMHUB.Notify.PushDone")} (${result?.failed ?? 0} failed)`,
+          `${summary}${errs ? "\n\n" + errs : ""}`
+        );
+      } catch (err) {
+        this._setStatus(
+          game.i18n.localize("GMHUB.Notify.PushFailed"),
+          err.message ?? ""
+        );
+      }
     });
   }
 
