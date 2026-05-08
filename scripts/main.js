@@ -270,12 +270,62 @@ Hooks.on("getJournalEntryPageContextOptions", (app, options) => {
   });
 });
 
-Hooks.on("updateJournalEntryPage", async (page, _change, _options, userId) => {
+// On any GM-driven page update, mark dirty + (if change.ownership) reverse-
+// map Foundry's eye-icon toggle to the GMhub `visibility` flag so the next
+// Push propagates the player-visibility flip.
+//
+// Foundry's per-page eye icon in the Journal sidebar toggles
+// ownership.default between NONE (GM-only) and OBSERVER (campaign-visible);
+// gmhub-app's entity / note rows model the same concept as a `visibility`
+// string column with values gm_only / campaign. We listen for the
+// ownership change here, write the new value into the page's FLAG_VISIBILITY
+// flag, and let `_pushEntityPage` / `_pushNotePage` (which already read from
+// that flag) include it on the next Push.
+//
+// Session-plan pages (GM Notes / GM Secrets / Agenda / Pinned) have
+// GM-only-forever invariants that don't surface as a `visibility` field on
+// gmhub-app, so we skip the visibility mapping for that kind — toggling the
+// eye on those pages affects only the local Foundry world.
+//
+// `isUserChange` filters out hook re-entries from our own setFlag() calls
+// (those land as change.flags only) so we don't auto-push twice or recurse.
+Hooks.on("updateJournalEntryPage", async (page, change, _options, userId) => {
   if (game.user.id !== userId) return;
   if (!game.user.isGM) return;
+
+  const parentKind = page.parent?.getFlag(MODULE_ID, "kind");
+  if (!parentKind) return;
+
+  if (change.ownership && parentKind !== "session") {
+    const NONE = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+    const newVisibility = page.ownership?.default === NONE ? "gm_only" : "campaign";
+    const currentVisibility = page.getFlag(MODULE_ID, "visibility");
+    if (currentVisibility !== newVisibility) {
+      try {
+        await page.setFlag(MODULE_ID, "visibility", newVisibility);
+      } catch (err) {
+        console.warn("[gmhub-vtt] visibility map failed", err);
+      }
+    }
+  }
+
+  const isUserChange =
+    change.text !== undefined ||
+    change.ownership !== undefined ||
+    change.name !== undefined;
+  if (!isUserChange) return;
+
   try {
     await page.setFlag(MODULE_ID, "dirty", true);
   } catch (err) {
     console.warn("[gmhub-vtt] page markDirty failed", err);
+  }
+
+  if (!game.settings.get(MODULE_ID, "autoPushOnUpdate")) return;
+  try {
+    const { sync } = game.modules.get(MODULE_ID).api;
+    await sync.pushOne(page.parent);
+  } catch (err) {
+    console.error("[gmhub-vtt] auto-push (page) failed", err);
   }
 });
