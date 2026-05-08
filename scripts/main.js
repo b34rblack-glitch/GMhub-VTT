@@ -101,6 +101,27 @@ Hooks.once("init", () => {
   }
 });
 
+// Defensive language-pack load. v0.3.1 in Foundry v14 surfaced UIs full of
+// raw i18n keys (GMHUB.Settings.BaseUrl.Name etc.) even though module.json
+// declares lang/en.json correctly and the file is in the release zip. Root
+// cause is unclear (suspected v13/v14 change in module language-pack
+// auto-load); the manual fetch + mergeObject here is a no-op if the
+// auto-loader worked, and rescues the UI if it didn't.
+Hooks.once("i18nInit", async () => {
+  try {
+    const res = await fetch(`modules/${MODULE_ID}/lang/en.json`);
+    if (!res.ok) {
+      console.warn(`[${MODULE_ID}] lang fetch returned ${res.status}`);
+      return;
+    }
+    const flat = await res.json();
+    const expanded = foundry.utils.expandObject(flat);
+    foundry.utils.mergeObject(game.i18n.translations, expanded, { inplace: true });
+  } catch (err) {
+    console.warn(`[${MODULE_ID}] manual lang load failed`, err);
+  }
+});
+
 Hooks.once("ready", () => {
   const client = new GmhubClient({
     getBaseUrl: () => game.settings.get(MODULE_ID, "baseUrl"),
@@ -117,11 +138,27 @@ Hooks.once("ready", () => {
   };
 });
 
+// Foundry v13 changed the renderJournalDirectory hook signature: `html` is
+// now a raw HTMLElement, not a jQuery wrapper. The v11/v12 path used
+// html.find(...).append(button) which silently no-ops in v13+. Branch on
+// type so the same hook works on every supported version.
 Hooks.on("renderJournalDirectory", (app, html) => {
   if (!game.user.isGM) return;
-  const button = $(`<button class="gmhub-sync-button"><i class="fas fa-cloud"></i> ${game.i18n.localize("GMHUB.Button.OpenDialog")}</button>`);
-  button.on("click", () => game.modules.get(MODULE_ID).api.openDialog());
-  html.find(".directory-header .header-actions").append(button);
+  const root = (html instanceof HTMLElement) ? html : (html?.[0] ?? null);
+  if (!root) return;
+  // v13+ exposes a .header-actions container holding the "Create Entry" /
+  // "Create Folder" buttons; v11/v12 nested it under .directory-header.
+  const target = root.querySelector(
+    ".directory-header .header-actions, .header-actions, .directory-header"
+  );
+  if (!target) return;
+  if (target.querySelector(".gmhub-sync-button")) return; // re-render guard
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "gmhub-sync-button";
+  button.innerHTML = `<i class="fas fa-cloud"></i> ${game.i18n.localize("GMHUB.Button.OpenDialog")}`;
+  button.addEventListener("click", () => game.modules.get(MODULE_ID).api.openDialog());
+  target.appendChild(button);
 });
 
 Hooks.on("getJournalEntryContextOptions", (html, options) => {

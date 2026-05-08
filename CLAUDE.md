@@ -25,7 +25,7 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
 | Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.3.1` |
+| Current version | `0.3.2` |
 | Foundry compat | v11 minimum, v14 verified, v14 maximum |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
@@ -77,13 +77,14 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 > **Update this section at the start of every new release.**
 
-`v0.3.1` is a compatibility-only release. Foundry v14 shipped, so `module.json#compatibility.verified` and `maximum` both move to `"14"`; `minimum` stays at `"11"`. No code changes — the v0.3.0 feature surface (session lifecycle controls, push diff preview, Agenda + Pinned editor) is unchanged. README compat lines and the v13-readiness debt row in §5 are dropped accordingly. Closes GMV-4; the still-open ApplicationV2 migration is now the lone v0.4.0 candidate.
+`v0.3.2` is a v14 runtime hotfix on top of v0.3.1's manifest-only enablement. The v0.3.1 install-OK / runtime-broken combo surfaced three bugs the original `verified: "14"` claim missed: the `renderJournalDirectory` hook used `html.find()` against the v13+ raw `HTMLElement` and silently no-op'd (no sidebar button); the module-level language-pack auto-load stopped picking up `lang/en.json` (every settings/dialog label rendered as the raw `GMHUB.*` key); and Test Connection "Failed to fetch" because `gmhub-app`'s `/api/v1/*` was missing CORS headers. This release fixes the first two in-module: hook signature shimmed for both jQuery (v11/v12) and `HTMLElement` (v13+), and a defensive `i18nInit` fetch + `mergeObject` so the lang strings land even if Foundry's auto-load misses them. The CORS fix lives in the sister `gmhub-app` PR. Cross-repo gate is still `docs/integration-test.md`.
 
 ## 5. Known Issues & Tech Debt
 
 | Priority | Issue | Notes |
 |---|---|---|
 | 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog and editors are V1; migration to ApplicationV2 deferred to v0.4.0. |
+| 🟢 Low | Root cause of v14 lang auto-load failure unknown | v0.3.2 ships a defensive manual fetch in `i18nInit` that works around it; the underlying Foundry behaviour is undiagnosed. Revisit if a future Foundry release re-breaks the workaround. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. Consider Quench or a stub Foundry environment if churn warrants it. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 
