@@ -25,8 +25,8 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
 | Sister repo | `github.com/b34rblack-glitch/DMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.2.0` |
-| Foundry compat | v11 minimum, v12 verified, v12 maximum |
+| Current version | `0.3.0` |
+| Foundry compat | v11 minimum, v12 verified, v13 maximum (v13 install allowed; runtime verification pending) |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
 
@@ -77,13 +77,13 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 > **Update this section at the start of every new release.**
 
-`v0.2.0` consumes the now-shipped `dmhub-app` Epic E `/api/v1/*` surface. The module mirrors `SCOPE.md` §"Foundry-side representation" exactly — six entity-kind journals + a Notes journal + a per-active-session journal whose GM Secrets page is page-level GM-only-forever. `pullAll` / `pushAll` cover entities + notes + plan + quick-notes + lifecycle; `pendingPushQueue` survives offline blips. CI release workflow ships `module.zip` + versioned `module.json` on every `v*` tag. The cross-repo gate is the seventeen-step checklist in `docs/integration-test.md`.
+`v0.3.0` closes the four feature gaps that v0.2.0 left open so a GM can run a full session lifecycle without leaving Foundry: Start/Pause/Resume/End buttons in `SyncDialog` (DMHUB-159), a push diff preview dialog that confirms before any API write (DMHUB-160), a structured Agenda + Pinned editor that round-trips edits via page flags (DMHUB-161), and a `module.json#compatibility.maximum` bump to `"13"` so the module installs in Foundry v13 (DMHUB-162; runtime `verified` stays at `"12"` until the integration test runs against v13). All shipped under DMHUB-158 epic. The cross-repo gate is still `docs/integration-test.md` (now exercising 21/21 steps including lifecycle).
 
 ## 5. Known Issues & Tech Debt
 
 | Priority | Issue | Notes |
 |---|---|---|
-| 🟡 Med | Foundry v13 not supported | Module declares max compat v12. Bumping to v13 likely needs an audit of `JournalEntryPage` API + the journal sidebar context-menu hook. Tracked as GMV-4 in `docs/EPICS.md`. |
+| 🟡 Med | Foundry v13 runtime verification pending | Manifest now allows v13 install (max `"13"`); `verified` stays `"12"` until a GM walks `docs/integration-test.md` in a v13 world. Application V1 is deprecated in v13 (still functional); migration to ApplicationV2 deferred to v0.4.0. DMHUB-162. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. Consider Quench or a stub Foundry environment if churn warrants it. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 
