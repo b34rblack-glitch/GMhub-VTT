@@ -33,13 +33,13 @@ For the cross-repo contract see [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md).
 
 | | |
 |---|---|
-| Module version | `0.1.0` |
-| Foundry compatibility | v11–v12 (verified v12); v13 readiness tracked in [`SCOPE.md`](SCOPE.md) |
+| Module version | `0.2.0` |
+| Foundry compatibility | v11–v12 (verified v12); v13 readiness tracked in [`docs/EPICS.md`](docs/EPICS.md) |
 | System | dnd5e ≥3.0 |
 | Shipped feature log | [`docs/EPICS.md`](docs/EPICS.md) |
-| Upstream dependency | `dmhub-app` Epic E — Public API & Foundry Foundations |
+| Upstream dependency | `dmhub-app` Epic E — Public API & Foundry Foundations (✅ shipped 2026-05-08) |
 
-> **Heads up:** the upstream API surface (Epic E in `dmhub-app`) is **planned, not yet shipped.** Until it ships, the contract is aspirational and end-to-end testing requires a stub server.
+The cross-repo end-to-end gate is the seventeen-step checklist in [`docs/integration-test.md`](docs/integration-test.md). Run it against a `dmhub-app` Vercel preview before cutting any release.
 
 ---
 

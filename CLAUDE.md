@@ -25,7 +25,7 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
 | Sister repo | `github.com/b34rblack-glitch/DMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.1.0` |
+| Current version | `0.2.0` |
 | Foundry compat | v11 minimum, v12 verified, v12 maximum |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
@@ -77,7 +77,7 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 > **Update this section at the start of every new release.**
 
-`v0.1.0` is the initial release. The upstream `/api/v1` surface is **not yet shipped in `dmhub-app`** (Epic E, planned). Until that lands, this module's REST contract is aspirational and end-to-end testing requires a stub server.
+`v0.2.0` consumes the now-shipped `dmhub-app` Epic E `/api/v1/*` surface. The module mirrors `SCOPE.md` §"Foundry-side representation" exactly — six entity-kind journals + a Notes journal + a per-active-session journal whose GM Secrets page is page-level GM-only-forever. `pullAll` / `pushAll` cover entities + notes + plan + quick-notes + lifecycle; `pendingPushQueue` survives offline blips. CI release workflow ships `module.zip` + versioned `module.json` on every `v*` tag. The cross-repo gate is the seventeen-step checklist in `docs/integration-test.md`.
 
 ## 5. Known Issues & Tech Debt
 
