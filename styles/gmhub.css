@@ -166,7 +166,9 @@
 }
 
 /* Entity chips on agenda scenes (the "Gareth Stone" / "Vex the Schemer"
-   tags from the web-app session prep editor's per-scene Link entity flow). */
+   tags from the web-app session prep editor's per-scene Link entity flow).
+   v0.4.1: also applied to <a class="content-link gmhub-scene-entity-chip">
+   when the entity is synced into this Foundry world (clickable open). */
 .gmhub-scene-entities {
   display: flex;
   flex-wrap: wrap;
@@ -185,6 +187,15 @@
   white-space: nowrap;
 }
 
+a.gmhub-scene-entity-chip {
+  text-decoration: none;
+  color: inherit;
+}
+
+a.gmhub-scene-entity-chip:hover {
+  background: rgba(120, 113, 108, 0.28);
+}
+
 /* 0.4.0-gamma: marker on the active session journal in the sidebar. The
    directory's <li> for whichever JournalEntry has externalId ===
    activeSessionId picks up this class via the renderJournalDirectory hook.
@@ -199,4 +210,72 @@
 .gmhub-active-session .entry-name,
 .gmhub-active-session .document-name {
   font-weight: 600;
+}
+
+/* v0.4.1: Pinned page card layout. Each pin renders as a card with type
+   chip + clickable Foundry content-link to the entity's page + first-
+   paragraph blurb pulled from the entity's summary. Optional pin_reason
+   line (forward-compatible with the gmhub-app pin-reason feature) renders
+   as an italic blockquote-styled line below the blurb. */
+.gmhub-pinned-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gmhub-pinned-card {
+  border: 1px solid var(--color-border-light-tertiary);
+  border-left: 3px solid #6366f1;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.gmhub-pinned-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.gmhub-pinned-type {
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(99, 102, 241, 0.15);
+  letter-spacing: 0.05em;
+}
+
+.gmhub-pinned-name {
+  font-size: 1.05em;
+  font-weight: 600;
+}
+
+a.gmhub-pinned-name {
+  text-decoration: none;
+  color: inherit;
+}
+
+a.gmhub-pinned-name:hover {
+  text-decoration: underline;
+}
+
+.gmhub-pinned-blurb {
+  font-size: 0.9em;
+  opacity: 0.85;
+  line-height: 1.4;
+}
+
+.gmhub-pinned-reason {
+  margin-top: 6px;
+  font-style: italic;
+  opacity: 0.85;
+  border-left: 2px solid rgba(120, 113, 108, 0.4);
+  padding-left: 8px;
+  font-size: 0.9em;
 }

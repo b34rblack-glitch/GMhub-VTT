@@ -18,9 +18,11 @@
 // window) are deleted, unless they carry unpushed dirty edits — those are
 // skipped with a warning toast so the GM can resolve before next Pull.
 //
-// v0.4.0-δ fans Push out across all session journals: editing a prep
-// session's GM Notes / Agenda / Pinned in Foundry pushes back to that
-// session, not just the active one.
+// v0.4.1 enriches the Pinned page render: per-pin cards with type chip,
+// clickable Foundry content-link to the entity's page, first-paragraph
+// blurb pulled from the entity's already-synced summary, and an optional
+// quoted reason line when the API returns `pin_reason` (forward-compatible
+// with the gmhub-app pin-reason feature).
 //
 // Stable IDs travel via flags.gmhub-vtt.externalId on every synced page
 // AND every session JournalEntry. Re-syncs key off the flag; we never look
@@ -100,6 +102,26 @@ async function ensureSessionFolder() {
   });
 }
 
+// v0.4.1: Locate the JournalEntryPage for a GMhub entity by its server-
+// side id. Walks the six kind-journals (already populated earlier in the
+// same Pull, since pullAll pulls entities before sessions). Returns null
+// if the entity isn't synced into this Foundry world yet — callers should
+// fall back to a name-only render and surface a "Pull to populate" hint.
+function _findEntityPageById(entityId) {
+  if (!entityId) return null;
+  for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
+    const journal = game.journal.contents.find(
+      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
+    );
+    if (!journal) continue;
+    const page = journal.pages.contents.find(
+      (p) => p.getFlag(MODULE_ID, FLAG_EXTERNAL_ID) === entityId
+    );
+    if (page) return page;
+  }
+  return null;
+}
+
 // ---- Tiptap ProseMirror-JSON → HTML ------------------------------------
 
 function _escapeHtml(s) {
@@ -109,6 +131,23 @@ function _escapeHtml(s) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// v0.4.1: Extract a short text blurb from rendered HTML. Used by
+// `pinnedHtml` to surface the first paragraph of an entity's summary on
+// each pinned card without dragging in the full body. Heuristic: take the
+// content of the first <p>...</p>; fall back to tag-stripped first 200
+// chars when no paragraph wrapper is present.
+function _firstParagraphFromHtml(html) {
+  if (!html) return "";
+  const str = String(html);
+  const match = str.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  if (match) {
+    const inner = match[1].trim();
+    if (inner && inner !== "&nbsp;") return inner;
+  }
+  const text = str.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+  return text.length > 200 ? `${text.slice(0, 200)}…` : text;
 }
 
 function _applyMarks(html, marks) {
@@ -237,20 +276,63 @@ export function renderPinnedHtml(pinned) {
   return pinnedHtml(pinned);
 }
 
+// v0.4.1: render each pin as a card with type chip + clickable Foundry
+// content-link to the entity's page + first-paragraph blurb pulled from
+// the synced entity. When the entity isn't in this Foundry world yet
+// (cross-campaign, not pulled, or deleted), fall back to a name-only row
+// with a "Pull to populate" hint. `pin_reason` is rendered as a quoted
+// blockquote line when present — forward-compatible with the gmhub-app
+// pin-reason feature; absent fields cleanly no-op.
 function pinnedHtml(pinned) {
   if (!Array.isArray(pinned) || pinned.length === 0) {
     return "<p><em>No pinned entities.</em></p>";
   }
   const items = pinned
-    .map((p) => {
-      const type = _escapeHtml(p?.entity_type ?? "");
-      const name = _escapeHtml(p?.name ?? "");
-      return `<li><strong>${type}</strong>: ${name}</li>`;
+    .map((pin) => {
+      const entityType = _escapeHtml(pin?.entity_type ?? "");
+      const name = _escapeHtml(pin?.name ?? "(unknown)");
+      const entityId = pin?.entity_id ?? null;
+      const reason = typeof pin?.pin_reason === "string" && pin.pin_reason.trim().length > 0
+        ? pin.pin_reason.trim()
+        : null;
+
+      const entityPage = _findEntityPageById(entityId);
+      let nameHtml;
+      let blurbHtml;
+      if (entityPage) {
+        const uuid = _escapeHtml(entityPage.uuid);
+        nameHtml = `<a class="content-link gmhub-pinned-name" data-uuid="${uuid}" data-entity-type="${entityType}" data-entity-id="${_escapeHtml(entityId ?? "")}" draggable="true"><i class="fas fa-book-open"></i> ${name}</a>`;
+        const blurb = _firstParagraphFromHtml(entityPage.text?.content ?? "");
+        blurbHtml = blurb
+          ? `<div class="gmhub-pinned-blurb">${blurb}</div>`
+          : `<div class="gmhub-pinned-blurb gmhub-empty-state">No summary on the linked entity yet.</div>`;
+      } else {
+        nameHtml = `<span class="gmhub-pinned-name">${name}</span>`;
+        blurbHtml = `<div class="gmhub-pinned-blurb gmhub-empty-state">Entity not in this Foundry world — Pull to populate.</div>`;
+      }
+
+      const reasonHtml = reason
+        ? `<div class="gmhub-pinned-reason">“${_escapeHtml(reason)}”</div>`
+        : "";
+
+      return `<li class="gmhub-pinned-card" data-entity-type="${entityType}" data-entity-id="${_escapeHtml(entityId ?? "")}">
+  <div class="gmhub-pinned-header">
+    <span class="gmhub-pinned-type">${entityType}</span>
+    ${nameHtml}
+  </div>
+  ${blurbHtml}
+  ${reasonHtml}
+</li>`;
     })
     .join("\n");
-  return `<ul>\n${items}\n</ul>`;
+  return `<ul class="gmhub-pinned-list">\n${items}\n</ul>`;
 }
 
+// v0.4.1: Per-scene entity chips become Foundry content-links when the
+// referenced entity is synced into this world (clickable, opens the
+// entity page in Foundry). Falls back to the static span chip when the
+// entity isn't pulled. The .gmhub-scene-entity-chip CSS class is shared
+// between both forms so styling stays consistent.
 function agendaHtml(agenda) {
   if (!Array.isArray(agenda) || agenda.length === 0) {
     return "<p><em>No agenda items.</em></p>";
@@ -266,10 +348,15 @@ function agendaHtml(agenda) {
       const entities = entitiesArr.length
         ? `<p class="gmhub-scene-entities">${entitiesArr
             .map((e) => {
-              const name = _escapeHtml(e?.name ?? "");
+              const entityName = _escapeHtml(e?.name ?? "");
               const type = _escapeHtml(e?.entityType ?? "");
               const id = _escapeHtml(e?.id ?? "");
-              return `<span class="gmhub-scene-entity-chip" data-entity-type="${type}" data-entity-id="${id}">${name}</span>`;
+              const entityPage = _findEntityPageById(e?.id);
+              if (entityPage) {
+                const uuid = _escapeHtml(entityPage.uuid);
+                return `<a class="content-link gmhub-scene-entity-chip" data-uuid="${uuid}" data-entity-type="${type}" data-entity-id="${id}" draggable="true">${entityName}</a>`;
+              }
+              return `<span class="gmhub-scene-entity-chip" data-entity-type="${type}" data-entity-id="${id}">${entityName}</span>`;
             })
             .join(" ")}</p>`
         : "";
@@ -660,10 +747,6 @@ export class SyncService {
     }
   }
 
-  // Push the dirty session-plan pages of one specific session journal.
-  // Looks up by externalId so multi-session worlds route correctly.
-  // result.pushed.sessionPlans accumulates across all session pushes
-  // performed in one pushAll call (was a boolean pre-0.4.0-δ).
   async _pushSessionPlan(campaignId, sessionId, result) {
     const journal = this._findSessionJournal(sessionId);
     if (!journal) return;
@@ -721,9 +804,6 @@ export class SyncService {
     const preview = {
       entities: { create: [], update: [] },
       notes: { create: [], update: [] },
-      // Aggregated booleans across all session journals — "at least one
-      // session has a dirty page of this kind". Per-session breakdown
-      // surfaces in `sessionPlanJournals` for future template enhancement.
       sessionPlan: { gmNotes: false, gmSecrets: false, agenda: false, pinned: false },
       sessionPlanJournals: [],
       quickNotes: 0,
@@ -763,10 +843,6 @@ export class SyncService {
       }
     }
 
-    // 0.4.0-δ: walk all session journals, not just the active one. The
-    // PushPreviewDialog template still consumes the aggregated booleans
-    // (sessionPlan.gmNotes etc.) so existing UI keeps working. Per-session
-    // breakdown lives in sessionPlanJournals for future surfacing.
     for (const journal of this._allSessionJournals()) {
       let anyDirty = false;
       for (const page of journal.pages.contents) {
@@ -805,8 +881,6 @@ export class SyncService {
       errors: []
     };
 
-    // Quick notes always attach to the active session per SCOPE § Quick
-    // notes; this is independent of the multi-session push fan-out.
     await this._drainQuickNoteQueue(campaignId, activeSessionId, result);
 
     for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
@@ -836,10 +910,6 @@ export class SyncService {
       }
     }
 
-    // 0.4.0-δ: push fans out across every session journal that has at
-    // least one dirty page. Each journal's externalId routes to its own
-    // session on the server, so prep edits, recap edits, and live-session
-    // edits all round-trip in a single Push.
     for (const journal of this._allSessionJournals()) {
       const sessionId = journal.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
       if (!sessionId) continue;
