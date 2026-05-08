@@ -28,7 +28,7 @@ Hooks.once("init", () => {
     default: ""
   });
 
-  // DMHUB-153 (E10) — bind the Foundry world to a single DMhub campaign.
+  // GMHUB-153 (E10) — bind the Foundry world to a single GMhub campaign.
   // Per GMhub-VTT SCOPE: 1 world ↔ 1 campaign, set once. Clearing campaignId
   // also clears activeSessionId so we never sync a stale session pin.
   game.settings.register(MODULE_ID, "campaignId", {
@@ -46,7 +46,7 @@ Hooks.once("init", () => {
     }
   });
 
-  // DMHUB-153 (E10) — set programmatically by the Pick Session dialog.
+  // GMHUB-153 (E10) — set programmatically by the Pick Session dialog.
   game.settings.register(MODULE_ID, "activeSessionId", {
     scope: "world",
     config: false,
@@ -54,7 +54,7 @@ Hooks.once("init", () => {
     default: ""
   });
 
-  // DMHUB-153 (E10) — queue of quick-notes / edits captured during a brief
+  // GMHUB-153 (E10) — queue of quick-notes / edits captured during a brief
   // network blip. Per GMhub-VTT SCOPE §Behaviour contracts "Quick notes are
   // queued in Foundry world flags so a brief network blip doesn't lose them."
   // Drained on the next successful Push.
@@ -139,7 +139,7 @@ Hooks.on("getJournalEntryContextOptions", (html, options) => {
   });
 });
 
-// DMHUB-155 (E12). On any GM-driven journal edit, mark the entry dirty so
+// GMHUB-155 (E12). On any GM-driven journal edit, mark the entry dirty so
 // the next manual Pull warns + the next manual Push picks it up. Auto-push
 // is off by default per GMhub-VTT SCOPE "Manual sync only" — only call
 // pushOne when the GM has opted in via the autoPushOnUpdate setting.
@@ -160,7 +160,7 @@ Hooks.on("updateJournalEntry", async (entry, _change, _options, userId) => {
   }
 });
 
-// DMHUB-161 — surface "Edit Agenda / Edit Pinned" on the page right-click
+// GMHUB-161 — surface "Edit Agenda / Edit Pinned" on the page right-click
 // context menu inside a session journal's table of contents. The hook fires
 // in Foundry v12 when the user right-clicks a page row in the TOC; in
 // earlier or later versions where the hook name has shifted, the GM can

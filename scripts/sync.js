@@ -1,6 +1,6 @@
-// GMhub VTT Bridge — Pull/Push orchestration (DMHUB-155 / E12).
+// GMhub VTT Bridge — Pull/Push orchestration (GMHUB-155 / E12).
 //
-// Maps DMhub content to Foundry's journal model per GMhub-VTT/SCOPE.md
+// Maps GMhub content to Foundry's journal model per GMhub-VTT/SCOPE.md
 // §"Foundry-side representation":
 //
 //   entities (NPCs, Locations, Factions, Items, Quests, Lore)
@@ -14,7 +14,7 @@
 //        Pinned.
 //
 // Conflict policy is direction-wins (per SCOPE): Pull overwrites Foundry,
-// Push overwrites DMhub. No merge, no per-field reconciliation.
+// Push overwrites GMhub. No merge, no per-field reconciliation.
 //
 // Stable IDs travel via flags.gmhub-vtt.externalId on every synced page.
 // Re-syncs key off the flag; we never look up by name.
@@ -29,7 +29,7 @@ const FLAG_DIRTY = "dirty";
 const FLAG_ENTITY_TYPE = "entityType";
 // Structured payloads stashed alongside the rendered HTML on agenda/pinned
 // session-plan pages, so AgendaEditorDialog can round-trip edits back to the
-// API shape on push. (DMHUB-161)
+// API shape on push. (GMHUB-161)
 const FLAG_AGENDA_DATA = "agendaItems";
 const FLAG_PINNED_DATA = "pinnedRefs";
 
@@ -69,7 +69,7 @@ function gmUserId() {
   return game.users.find((u) => u.isGM)?.id ?? game.user.id;
 }
 
-// Map DMhub four-value visibility → Foundry page-level ownership map.
+// Map GMhub four-value visibility → Foundry page-level ownership map.
 // gm_secrets is treated separately by callers (always pinned to GM-only).
 export function entityVisibilityToOwnership(visibility) {
   const { NONE, OBSERVER, OWNER } = ownershipLevels();
@@ -454,7 +454,7 @@ export class SyncService {
       partial.gm_secrets = secrets.text?.content ?? "";
     }
     // Agenda / Pinned: round-tripped via structured page flags written by
-    // AgendaEditorDialog (DMHUB-161). The rendered HTML is regenerated on
+    // AgendaEditorDialog (GMHUB-161). The rendered HTML is regenerated on
     // both pull and on save in the editor; the flag is the source of truth
     // for push.
     const agendaPage = byName.get(SESSION_PAGE_AGENDA);
@@ -492,7 +492,7 @@ export class SyncService {
   }
 
   // Dry-run classification of what pushAll() would do, without making any
-  // API calls. Backs the Push preview dialog (DMHUB-160). A page is "create"
+  // API calls. Backs the Push preview dialog (GMHUB-160). A page is "create"
   // if it carries no externalId flag, "update" if it has the flag AND is
   // dirty; pages clean of dirty are skipped (existing pushAll behaviour
   // re-uploads them, but the preview classifies by intent so the GM sees
@@ -625,7 +625,7 @@ export class SyncService {
     return result;
   }
 
-  // Push a single JournalEntry (the "Push to DMhub" context-menu action in
+  // Push a single JournalEntry (the "Push to GMhub" context-menu action in
   // main.js). Maps to the same per-page upserts pushAll does, scoped to one
   // entry. Entry must carry flags.gmhub-vtt.kind so we know what to do with it.
   async pushOne(entry) {
@@ -653,7 +653,7 @@ export class SyncService {
       if (sessionId) await this._pushSessionPlan(campaignId, sessionId, result);
     } else {
       // Unknown / unflagged entry — don't guess.
-      throw new Error("entry_not_bound_to_dmhub");
+      throw new Error("entry_not_bound_to_gmhub");
     }
     return result;
   }

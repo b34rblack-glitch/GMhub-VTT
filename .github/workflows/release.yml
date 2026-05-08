@@ -1,4 +1,4 @@
-# GMhub VTT Bridge — release workflow (DMHUB-157 / E14).
+# GMhub VTT Bridge — release workflow (GMHUB-157 / E14).
 #
 # Triggers on `v*` tag. Validates that module.json#version matches the tag,
 # substitutes a versioned `download` URL into a release-only copy of the

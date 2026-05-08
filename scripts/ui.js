@@ -1,4 +1,4 @@
-// GMhub VTT Bridge — Foundry Application classes (DMHUB-153 / E10).
+// GMhub VTT Bridge — Foundry Application classes (GMHUB-153 / E10).
 //
 // Three dialogs:
 //   SyncDialog          The main hub. Renders one of three states:
@@ -26,7 +26,7 @@ function statusLabel(session) {
 }
 
 // Map a session's status label to which lifecycle transitions are valid for it.
-// Mirrors the server-side state machine in dmhub-app's lifecycle route.
+// Mirrors the server-side state machine in gmhub-app's lifecycle route.
 function lifecycleAvailableFor(status) {
   switch (status) {
     case "prep":   return { start: true,  pause: false, resume: false, end: false };
@@ -277,7 +277,7 @@ export class SyncDialog extends Application {
   }
 }
 
-// DMHUB-153 (E10). FormApplication subclass — even though we don't submit a
+// GMHUB-153 (E10). FormApplication subclass — even though we don't submit a
 // form, FormApplication gives us focus management + close-on-Escape semantics
 // without rolling our own.
 export class PickSessionDialog extends Application {
@@ -450,7 +450,7 @@ export class PushPreviewDialog extends Application {
 // Editor for the structured agenda + pinned payloads stored on the session
 // plan's pages as flags.gmhub-vtt.{agendaItems,pinnedRefs}. On save it
 // rewrites the page flag, regenerates the rendered HTML preview, and marks
-// the page dirty so the next Push uploads the change. (DMHUB-161)
+// the page dirty so the next Push uploads the change. (GMHUB-161)
 export class AgendaEditorDialog extends Application {
   constructor({ page, kind } = {}, options = {}) {
     super(options);

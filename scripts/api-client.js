@@ -1,4 +1,4 @@
-// GMhub VTT Bridge — DMhub /api/v1/* client (DMHUB-154 / E11).
+// GMhub VTT Bridge — GMhub /api/v1/* client (GMHUB-154 / E11).
 //
 // Live spec: ${baseUrl}/docs (or GET /api/v1/openapi.json).
 // One method per E5/E6 endpoint, plus an iterateAll() helper for cursor

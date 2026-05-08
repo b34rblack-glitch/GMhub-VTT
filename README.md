@@ -2,7 +2,7 @@
 
 > The Foundry VTT module that brings GMhub into the live game session.
 
-A Foundry VTT module that two-way-syncs DMhub campaign content with Foundry **journals only** — no scenes, actors, or background sync. Built for Foundry v11/v12, D&D 5e system.
+A Foundry VTT module that two-way-syncs GMhub campaign content with Foundry **journals only** — no scenes, actors, or background sync. Built for Foundry v11/v12, D&D 5e system.
 
 The durable product scope (mission, workflow position, in-scope / out-of-scope, behaviour contracts) lives in [`SCOPE.md`](./SCOPE.md). Read that first if you're trying to understand what this module is and isn't.
 
@@ -10,11 +10,11 @@ The durable product scope (mission, workflow position, in-scope / out-of-scope, 
 
 ## Vision
 
-DMhub's value lands at the table. This module extends that reach into the place a lot of GMs already run their game — Foundry — so journal-shaped content (session notes, NPC writeups, location lore) doesn't have to live in two places.
+GMhub's value lands at the table. This module extends that reach into the place a lot of GMs already run their game — Foundry — so journal-shaped content (session notes, NPC writeups, location lore) doesn't have to live in two places.
 
 The wedge is intentionally narrow: **journals first, with stable IDs that survive re-syncs.** Actor sheets, scenes, and live websocket updates are explicitly out of scope (see [`SCOPE.md`](./SCOPE.md)).
 
-For the parent product's vision and shipped-feature log, see the [`dmhub-app` README](https://github.com/b34rblack-glitch/DMhub-app#readme) and its [`docs/EPICS.md`](https://github.com/b34rblack-glitch/DMhub-app/blob/main/docs/EPICS.md).
+For the parent product's vision and shipped-feature log, see the [`gmhub-app` README](https://github.com/b34rblack-glitch/GMhub-app#readme) and its [`docs/EPICS.md`](https://github.com/b34rblack-glitch/GMhub-app/blob/main/docs/EPICS.md).
 
 ---
 
@@ -22,7 +22,7 @@ For the parent product's vision and shipped-feature log, see the [`dmhub-app` RE
 
 | Repo | Role |
 |---|---|
-| [**`dmhub-app`**](https://github.com/b34rblack-glitch/DMhub-app) | The web application this module syncs with. Owns the `/api/v1` REST surface (Epic E). Tracks this repo as **Epic G**. |
+| [**`gmhub-app`**](https://github.com/b34rblack-glitch/GMhub-app) | The web application this module syncs with. Owns the `/api/v1` REST surface (Epic E). Tracks this repo as **Epic G**. |
 | **`gmhub-vtt`** *(this repo)* | The Foundry module. |
 
 For the cross-repo contract see [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md).
@@ -37,9 +37,9 @@ For the cross-repo contract see [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md).
 | Foundry compatibility | v11–v12 (verified v12); v13 readiness tracked in [`docs/EPICS.md`](docs/EPICS.md) |
 | System | dnd5e ≥3.0 |
 | Shipped feature log | [`docs/EPICS.md`](docs/EPICS.md) |
-| Upstream dependency | `dmhub-app` Epic E — Public API & Foundry Foundations (✅ shipped 2026-05-08) |
+| Upstream dependency | `gmhub-app` Epic E — Public API & Foundry Foundations (✅ shipped 2026-05-08) |
 
-The cross-repo end-to-end gate is the seventeen-step checklist in [`docs/integration-test.md`](docs/integration-test.md). Run it against a `dmhub-app` Vercel preview before cutting any release.
+The cross-repo end-to-end gate is the seventeen-step checklist in [`docs/integration-test.md`](docs/integration-test.md). Run it against a `gmhub-app` Vercel preview before cutting any release.
 
 ---
 
@@ -47,8 +47,8 @@ The cross-repo end-to-end gate is the seventeen-step checklist in [`docs/integra
 
 (See [`SCOPE.md`](SCOPE.md) for the full contract.)
 
-- **Pull** the DMhub codex (NPCs, Locations, Factions, Items, Quests, Lore), long-form notes, and the active session plan into Foundry as JournalEntries.
-- **Push** GM table-side work back to DMhub: visibility flips, new entries, edits, and quick-notes captured during play.
+- **Pull** the GMhub codex (NPCs, Locations, Factions, Items, Quests, Lore), long-form notes, and the active session plan into Foundry as JournalEntries.
+- **Push** GM table-side work back to GMhub: visibility flips, new entries, edits, and quick-notes captured during play.
 - **Manual** sync only. No live/background sync. The GM presses Pull or Push when they choose.
 - **One world ↔ one campaign.** Set once in module settings.
 
@@ -74,15 +74,15 @@ In Foundry: **Game Settings → Configure Settings → Module Settings → GMhub
 
 | Setting        | What it does                                                |
 |----------------|-------------------------------------------------------------|
-| DMhub Base URL | Root URL of the DMhub-app deployment                        |
-| DMhub API Key  | Bearer token used in `Authorization: Bearer …` (GM-only)    |
-| Campaign       | Bound DMhub campaign for this Foundry world                 |
+| GMhub Base URL | Root URL of the GMhub-app deployment                        |
+| GMhub API Key  | Bearer token used in `Authorization: Bearer …` (GM-only)    |
+| Campaign       | Bound GMhub campaign for this Foundry world                 |
 
 Push and Pull live in the **GMhub** section of the Journal sidebar.
 
 ## API contract
 
-The module talks to the DMhub Public API tracked under **Epic E** in [`b34rblack-glitch/dmhub-app`](https://github.com/b34rblack-glitch/dmhub-app). The endpoint surface is **owned by that work** — not duplicated in this README — to keep one source of truth. See [`SCOPE.md`](./SCOPE.md) for the content types this module syncs and [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the cross-repo contract summary.
+The module talks to the GMhub Public API tracked under **Epic E** in [`b34rblack-glitch/gmhub-app`](https://github.com/b34rblack-glitch/gmhub-app). The endpoint surface is **owned by that work** — not duplicated in this README — to keep one source of truth. See [`SCOPE.md`](./SCOPE.md) for the content types this module syncs and [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the cross-repo contract summary.
 
 ## Development
 
@@ -98,7 +98,7 @@ Then enable the module in your world.
 
 - [`SCOPE.md`](SCOPE.md) — durable product scope (mission, in-scope, out-of-scope, behaviour contracts).
 - [`docs/EPICS.md`](docs/EPICS.md) — append-only release/feature log + open backlog.
-- [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) — cross-repo contract with `dmhub-app`.
+- [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) — cross-repo contract with `gmhub-app`.
 - [`CLAUDE.md`](CLAUDE.md) — agent guardrails for working in this repo.
 
 Roadmap (high level; the full backlog lives in [`docs/EPICS.md`](docs/EPICS.md)):
