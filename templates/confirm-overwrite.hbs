@@ -1,0 +1,25 @@
+<div class="gmhub-confirm-overwrite">
+  <p class="gmhub-warning">
+    <i class="fas fa-exclamation-triangle"></i>
+    {{localize "GMHUB.ConfirmOverwrite.Body"}}
+  </p>
+
+  {{#if dirtyCount}}
+    <p>{{localize "GMHUB.ConfirmOverwrite.UnpushedCountPrefix"}} <strong>{{dirtyCount}}</strong> {{localize "GMHUB.ConfirmOverwrite.UnpushedCountSuffix"}}</p>
+  {{/if}}
+
+  <ul>
+    {{#each dirtyEntries}}
+      <li><strong>{{this.name}}</strong></li>
+    {{/each}}
+  </ul>
+
+  <footer class="gmhub-confirm-actions">
+    <button type="button" data-action="cancel">
+      <i class="fas fa-times"></i> {{localize "GMHUB.Button.Cancel"}}
+    </button>
+    <button type="button" data-action="overwrite" class="gmhub-danger">
+      <i class="fas fa-exclamation"></i> {{localize "GMHUB.Button.OverwriteAnyway"}}
+    </button>
+  </footer>
+</div>

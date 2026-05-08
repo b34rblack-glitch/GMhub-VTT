@@ -1,0 +1,30 @@
+<div class="gmhub-pick-session">
+  <header class="gmhub-pick-header">
+    <p>{{localize "GMHUB.PickSession.Body"}}</p>
+    <button type="button" data-action="refresh">
+      <i class="fas fa-sync"></i> {{localize "GMHUB.Button.Refresh"}}
+    </button>
+  </header>
+
+  {{#if loading}}
+    <p class="gmhub-pick-loading">{{localize "GMHUB.PickSession.Loading"}}</p>
+  {{else if error}}
+    <p class="gmhub-pick-error">{{error}}</p>
+  {{else if sessions.length}}
+    <ul class="gmhub-pick-list">
+      {{#each sessions}}
+        <li>
+          <button type="button" data-action="pick" data-session-id="{{this.id}}" class="gmhub-pick-row">
+            <span class="gmhub-pick-name">{{this.title}}</span>
+            <span class="gmhub-pick-meta">
+              <span class="gmhub-pick-status">{{this.statusLabel}}</span>
+              <span class="gmhub-pick-plan">{{this.plan_state}}</span>
+            </span>
+          </button>
+        </li>
+      {{/each}}
+    </ul>
+  {{else}}
+    <p class="gmhub-pick-empty">{{localize "GMHUB.PickSession.Empty"}}</p>
+  {{/if}}
+</div>

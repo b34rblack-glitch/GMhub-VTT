@@ -1,185 +1,547 @@
+// GMhub VTT Bridge — Pull/Push orchestration (DMHUB-155 / E12).
+//
+// Maps DMhub content to Foundry's journal model per GMhub-VTT/SCOPE.md
+// §"Foundry-side representation":
+//
+//   entities (NPCs, Locations, Factions, Items, Quests, Lore)
+//     → six JournalEntries, one per entity_kind (NPCs / Locations / …).
+//     → each entity is a page within its kind-journal.
+//   notes
+//     → a single "Notes" JournalEntry, one page per note.
+//   session_plan (active session only)
+//     → a dedicated session JournalEntry with four pages:
+//        GM Notes, Agenda, GM Secrets (page-ownership GM-only forever),
+//        Pinned.
+//
+// Conflict policy is direction-wins (per SCOPE): Pull overwrites Foundry,
+// Push overwrites DMhub. No merge, no per-field reconciliation.
+//
+// Stable IDs travel via flags.gmhub-vtt.externalId on every synced page.
+// Re-syncs key off the flag; we never look up by name.
+
 import { MODULE_ID } from "./main.js";
 
+const FLAG_KIND = "kind"; // "npc" | "location" | … | "notes" | "session"
 const FLAG_EXTERNAL_ID = "externalId";
-const FLAG_PAGE_EXTERNAL_ID = "externalId";
+const FLAG_VISIBILITY = "visibility";
+const FLAG_REVEALED_AT = "revealedAt";
+const FLAG_DIRTY = "dirty";
+const FLAG_ENTITY_TYPE = "entityType";
+
+const KIND_JOURNAL_NAMES = {
+  npc: "NPCs",
+  location: "Locations",
+  faction: "Factions",
+  item: "Items",
+  quest: "Quests",
+  lore: "Lore"
+};
+
+const NOTES_JOURNAL_NAME = "Notes";
+
+const SESSION_PAGE_GM_NOTES = "GM Notes";
+const SESSION_PAGE_AGENDA = "Agenda";
+const SESSION_PAGE_SECRETS = "GM Secrets";
+const SESSION_PAGE_PINNED = "Pinned";
+
+function sessionJournalName(sessionTitle) {
+  return `Session: ${sessionTitle ?? "(untitled)"}`;
+}
+
+// Foundry's CONST.DOCUMENT_OWNERSHIP_LEVELS — read at runtime so we don't
+// import the Foundry global at module-load time.
+function ownershipLevels() {
+  return {
+    NONE: CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE,
+    OBSERVER: CONST.DOCUMENT_OWNERSHIP_LEVELS.OBSERVER,
+    OWNER: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER
+  };
+}
+
+function gmUserId() {
+  // game.users may have multiple GMs; pick the active one. The module is
+  // single-GM by design (CLAUDE.md §5 known issue).
+  return game.users.find((u) => u.isGM)?.id ?? game.user.id;
+}
+
+// Map DMhub four-value visibility → Foundry page-level ownership map.
+// gm_secrets is treated separately by callers (always pinned to GM-only).
+export function entityVisibilityToOwnership(visibility) {
+  const { NONE, OBSERVER, OWNER } = ownershipLevels();
+  const gmId = gmUserId();
+  switch (visibility) {
+    case "private":
+    case "gm_only":
+      return { default: NONE, [gmId]: OWNER };
+    case "players_only":
+    case "campaign":
+    default:
+      return { default: OBSERVER, [gmId]: OWNER };
+  }
+}
+
+function pinnedHtml(pinned) {
+  if (!Array.isArray(pinned) || pinned.length === 0) {
+    return "<p><em>No pinned entities.</em></p>";
+  }
+  const items = pinned
+    .map((p) => `<li><strong>${p.entity_type}</strong>: ${p.name}</li>`)
+    .join("\n");
+  return `<ul>\n${items}\n</ul>`;
+}
+
+function agendaHtml(agenda) {
+  if (!Array.isArray(agenda) || agenda.length === 0) {
+    return "<p><em>No agenda items.</em></p>";
+  }
+  const items = agenda
+    .map((scene) => {
+      const dur = scene.estimated_duration_min
+        ? ` <em>(${scene.estimated_duration_min}m)</em>`
+        : "";
+      const notes = scene.notes ? `<p>${scene.notes}</p>` : "";
+      return `<li><strong>${scene.title ?? "(untitled)"}</strong>${dur}${notes}</li>`;
+    })
+    .join("\n");
+  return `<ol>\n${items}\n</ol>`;
+}
 
 export class SyncService {
   constructor(client) {
     this.client = client;
   }
 
-  _serializePage(page) {
-    const externalId = page.getFlag(MODULE_ID, FLAG_PAGE_EXTERNAL_ID) ?? null;
-    const base = {
-      id: externalId,
-      foundryId: page.id,
-      name: page.name,
-      type: page.type,
-      sort: page.sort ?? 0
-    };
-    if (page.type === "text") {
-      base.text = {
-        content: page.text?.content ?? "",
-        format: page.text?.format ?? CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML
-      };
-    } else if (page.type === "image") {
-      base.src = page.src ?? null;
-      base.image = { caption: page.image?.caption ?? "" };
-    }
-    return base;
-  }
+  // ---- shared journal helpers ----
 
-  _serializeJournal(entry) {
-    return {
-      id: entry.getFlag(MODULE_ID, FLAG_EXTERNAL_ID) ?? null,
-      foundryId: entry.id,
-      name: entry.name,
-      folder: entry.folder?.name ?? null,
-      pages: entry.pages.contents.map((p) => this._serializePage(p))
-    };
-  }
-
-  async pushJournal(entry) {
-    const payload = this._serializeJournal(entry);
-    const remote = payload.id
-      ? await this.client.updateJournal(payload.id, payload)
-      : await this.client.createJournal(payload);
-
-    if (!remote?.id) return remote;
-
-    if (remote.id !== payload.id) {
-      await entry.setFlag(MODULE_ID, FLAG_EXTERNAL_ID, remote.id);
-    }
-
-    if (Array.isArray(remote.pages)) {
-      const updates = [];
-      for (const remotePage of remote.pages) {
-        const localPage = entry.pages.get(remotePage.foundryId);
-        if (!localPage) continue;
-        const currentExternal = localPage.getFlag(MODULE_ID, FLAG_PAGE_EXTERNAL_ID);
-        if (remotePage.id && remotePage.id !== currentExternal) {
-          updates.push({ _id: localPage.id, [`flags.${MODULE_ID}.${FLAG_PAGE_EXTERNAL_ID}`]: remotePage.id });
-        }
-      }
-      if (updates.length) {
-        await entry.updateEmbeddedDocuments("JournalEntryPage", updates);
-      }
-    }
-
-    return remote;
-  }
-
-  async pushAll() {
-    const entries = game.journal.contents;
-    const results = { pushed: 0, failed: 0, errors: [] };
-    for (const entry of entries) {
-      try {
-        await this.pushJournal(entry);
-        results.pushed += 1;
-      } catch (err) {
-        results.failed += 1;
-        results.errors.push({ name: entry.name, message: err.message });
-      }
-    }
-    return results;
-  }
-
-  _findLocalByExternalId(externalId) {
-    return game.journal.contents.find((e) => e.getFlag(MODULE_ID, FLAG_EXTERNAL_ID) === externalId) ?? null;
-  }
-
-  _pageDataFromRemote(remotePage) {
-    const data = {
-      name: remotePage.name ?? "Untitled",
-      type: remotePage.type ?? "text",
-      sort: remotePage.sort ?? 0,
-      flags: { [MODULE_ID]: { [FLAG_PAGE_EXTERNAL_ID]: remotePage.id } }
-    };
-    if (data.type === "text") {
-      data.text = {
-        content: remotePage.text?.content ?? "",
-        format: remotePage.text?.format ?? CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML
-      };
-    } else if (data.type === "image") {
-      data.src = remotePage.src ?? null;
-      data.image = { caption: remotePage.image?.caption ?? "" };
-    }
-    return data;
-  }
-
-  async pullJournal(remote) {
-    const existing = this._findLocalByExternalId(remote.id);
+  async _findOrCreateJournal(name, kind, extraFlags = {}) {
+    const existing = game.journal.contents.find(
+      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
+    );
     if (existing) {
-      await existing.update({
-        name: remote.name,
-        flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: remote.id } }
-      });
-      await this._reconcilePages(existing, remote.pages ?? []);
+      if (existing.name !== name) {
+        await existing.update({ name });
+      }
       return existing;
     }
-
-    const created = await JournalEntry.create({
-      name: remote.name ?? "Untitled",
-      flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: remote.id } }
+    return JournalEntry.create({
+      name,
+      flags: { [MODULE_ID]: { [FLAG_KIND]: kind, ...extraFlags } }
     });
-    if (remote.pages?.length) {
-      await created.createEmbeddedDocuments(
-        "JournalEntryPage",
-        remote.pages.map((p) => this._pageDataFromRemote(p))
-      );
-    }
-    return created;
   }
 
-  async _reconcilePages(entry, remotePages) {
-    const localByExternal = new Map();
-    for (const page of entry.pages.contents) {
-      const ext = page.getFlag(MODULE_ID, FLAG_PAGE_EXTERNAL_ID);
-      if (ext) localByExternal.set(ext, page);
+  _findPageByExternalId(journal, externalId) {
+    return (
+      journal.pages.contents.find(
+        (p) => p.getFlag(MODULE_ID, FLAG_EXTERNAL_ID) === externalId
+      ) ?? null
+    );
+  }
+
+  _entityPagePayload(entity) {
+    return {
+      name: entity.name,
+      type: "text",
+      text: { content: entity.summary ?? "", format: 1 /* HTML */ },
+      ownership: entityVisibilityToOwnership(entity.visibility),
+      flags: {
+        [MODULE_ID]: {
+          [FLAG_EXTERNAL_ID]: entity.id,
+          [FLAG_ENTITY_TYPE]: entity.entity_type,
+          [FLAG_VISIBILITY]: entity.visibility,
+          [FLAG_REVEALED_AT]: entity.revealed_at,
+          [FLAG_DIRTY]: false
+        }
+      }
+    };
+  }
+
+  _notePagePayload(note) {
+    return {
+      name: note.title ?? "Untitled note",
+      type: "text",
+      text: { content: note.body ?? "", format: 1 },
+      ownership: entityVisibilityToOwnership(note.visibility),
+      flags: {
+        [MODULE_ID]: {
+          [FLAG_EXTERNAL_ID]: note.id,
+          [FLAG_VISIBILITY]: note.visibility,
+          [FLAG_DIRTY]: false
+        }
+      }
+    };
+  }
+
+  async _upsertPage(journal, externalId, payload) {
+    const existing = this._findPageByExternalId(journal, externalId);
+    if (existing) {
+      await journal.updateEmbeddedDocuments("JournalEntryPage", [
+        { _id: existing.id, ...payload }
+      ]);
+      return existing.id;
+    }
+    const [created] = await journal.createEmbeddedDocuments("JournalEntryPage", [payload]);
+    return created.id;
+  }
+
+  // ---- dirty-detection ----
+
+  _findDirtyEntries() {
+    return game.journal.contents.filter((entry) => {
+      if (entry.getFlag(MODULE_ID, FLAG_DIRTY)) return true;
+      return entry.pages.contents.some((p) => p.getFlag(MODULE_ID, FLAG_DIRTY));
+    });
+  }
+
+  // ---- Pull ----
+
+  async pullAll({ confirmOverwrite } = {}) {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) {
+      return { cancelled: false, error: "no_campaign_bound" };
+    }
+    const activeSessionId = game.settings.get(MODULE_ID, "activeSessionId");
+
+    const dirty = this._findDirtyEntries();
+    if (dirty.length && typeof confirmOverwrite === "function") {
+      const confirmed = await confirmOverwrite(dirty);
+      if (!confirmed) return { cancelled: true };
     }
 
-    const toCreate = [];
-    const toUpdate = [];
-    const remoteIds = new Set();
+    const result = {
+      pulled: { entities: 0, notes: 0, sessionPlan: false },
+      errors: []
+    };
 
-    for (const remotePage of remotePages) {
-      remoteIds.add(remotePage.id);
-      const local = localByExternal.get(remotePage.id);
-      if (local) {
-        toUpdate.push({ _id: local.id, ...this._pageDataFromRemote(remotePage) });
-      } else {
-        toCreate.push(this._pageDataFromRemote(remotePage));
+    // Entities — six kind-journals.
+    for (const [kind, journalName] of Object.entries(KIND_JOURNAL_NAMES)) {
+      try {
+        const journal = await this._findOrCreateJournal(journalName, kind);
+        for await (const entity of this.client.iterateAll(
+          (opts) => this.client.listEntities(campaignId, { ...opts, type: kind, limit: 100 }),
+          {}
+        )) {
+          await this._upsertPage(journal, entity.id, this._entityPagePayload(entity));
+          result.pulled.entities += 1;
+        }
+        await journal.unsetFlag(MODULE_ID, FLAG_DIRTY).catch(() => {});
+      } catch (err) {
+        result.errors.push({ name: journalName, message: err.message ?? String(err) });
       }
     }
 
-    const toDelete = [];
-    for (const [ext, local] of localByExternal.entries()) {
-      if (!remoteIds.has(ext)) toDelete.push(local.id);
+    // Notes — single journal.
+    try {
+      const notesJournal = await this._findOrCreateJournal(NOTES_JOURNAL_NAME, "notes");
+      for await (const note of this.client.iterateAll(
+        (opts) => this.client.listNotes(campaignId, { ...opts, limit: 100 }),
+        {}
+      )) {
+        await this._upsertPage(notesJournal, note.id, this._notePagePayload(note));
+        result.pulled.notes += 1;
+      }
+      await notesJournal.unsetFlag(MODULE_ID, FLAG_DIRTY).catch(() => {});
+    } catch (err) {
+      result.errors.push({ name: NOTES_JOURNAL_NAME, message: err.message ?? String(err) });
     }
 
-    if (toDelete.length) await entry.deleteEmbeddedDocuments("JournalEntryPage", toDelete);
-    if (toUpdate.length) await entry.updateEmbeddedDocuments("JournalEntryPage", toUpdate);
-    if (toCreate.length) await entry.createEmbeddedDocuments("JournalEntryPage", toCreate);
-  }
-
-  async pullAll() {
-    const lastPull = game.settings.get(MODULE_ID, "lastPullAt") || null;
-    const list = await this.client.listJournals(lastPull ? { updatedSince: lastPull } : {});
-    const remotes = Array.isArray(list) ? list : list?.journals ?? [];
-    const results = { pulled: 0, failed: 0, errors: [] };
-
-    for (const summary of remotes) {
+    // Session plan — only if a session is bound.
+    if (activeSessionId) {
       try {
-        const full = summary.pages ? summary : await this.client.getJournal(summary.id);
-        await this.pullJournal(full);
-        results.pulled += 1;
+        const session = await this.client.getSession(campaignId, activeSessionId);
+        const plan = await this.client.getSessionPlan(campaignId, activeSessionId);
+        const journal = await this._findOrCreateJournal(
+          sessionJournalName(session.title),
+          "session",
+          { [FLAG_EXTERNAL_ID]: activeSessionId }
+        );
+        const { NONE, OWNER } = ownershipLevels();
+        const gmOnly = { default: NONE, [gmUserId()]: OWNER };
+
+        await this._upsertPage(journal, `${activeSessionId}:gm_notes`, {
+          name: SESSION_PAGE_GM_NOTES,
+          type: "text",
+          text: { content: plan.gm_notes ?? "", format: 1 },
+          ownership: gmOnly,
+          flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:gm_notes`, [FLAG_DIRTY]: false } }
+        });
+        await this._upsertPage(journal, `${activeSessionId}:agenda`, {
+          name: SESSION_PAGE_AGENDA,
+          type: "text",
+          text: { content: agendaHtml(plan.agenda), format: 1 },
+          ownership: gmOnly,
+          flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:agenda`, [FLAG_DIRTY]: false } }
+        });
+        // GM Secrets is included only when the token's scope permitted it
+        // (the server omits the field otherwise — absence is the signal).
+        if (Object.prototype.hasOwnProperty.call(plan, "gm_secrets")) {
+          await this._upsertPage(journal, `${activeSessionId}:gm_secrets`, {
+            name: SESSION_PAGE_SECRETS,
+            type: "text",
+            text: { content: plan.gm_secrets ?? "", format: 1 },
+            ownership: gmOnly, // GM-only forever — page-level invariant.
+            flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:gm_secrets`, [FLAG_DIRTY]: false } }
+          });
+        }
+        await this._upsertPage(journal, `${activeSessionId}:pinned`, {
+          name: SESSION_PAGE_PINNED,
+          type: "text",
+          text: { content: pinnedHtml(plan.pinned), format: 1 },
+          ownership: gmOnly,
+          flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:pinned`, [FLAG_DIRTY]: false } }
+        });
+        result.pulled.sessionPlan = true;
       } catch (err) {
-        results.failed += 1;
-        results.errors.push({ name: summary.name ?? summary.id, message: err.message });
+        result.errors.push({ name: "session-plan", message: err.message ?? String(err) });
       }
     }
 
     await game.settings.set(MODULE_ID, "lastPullAt", new Date().toISOString());
-    return results;
+    return result;
+  }
+
+  // ---- Push ----
+
+  // Drain the world-flag-backed quick-note queue first, per GMhub-VTT SCOPE
+  // §Behaviour contracts: "Quick notes are queued in Foundry world flags so
+  // a brief network blip doesn't lose them." Successful entries are removed
+  // from the queue; failed ones stay for the next push.
+  async _drainQuickNoteQueue(campaignId, sessionId, result) {
+    if (!sessionId) return;
+    const queue = game.settings.get(MODULE_ID, "pendingPushQueue") ?? [];
+    if (!queue.length) return;
+    const remaining = [];
+    for (const item of queue) {
+      try {
+        await this.client.addQuickNote(campaignId, sessionId, {
+          body: item.body,
+          mentioned_entity_id: item.mentioned_entity_id ?? null
+        });
+        result.pushed.quickNotes += 1;
+      } catch (err) {
+        remaining.push(item);
+        result.errors.push({
+          name: "quick-note",
+          message: err.message ?? String(err)
+        });
+      }
+    }
+    await game.settings.set(MODULE_ID, "pendingPushQueue", remaining);
+  }
+
+  async _pushEntityPage(campaignId, kind, page, result) {
+    const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+    const visibility = page.getFlag(MODULE_ID, FLAG_VISIBILITY) ?? "campaign";
+    const payload = {
+      entity_type: kind,
+      name: page.name,
+      summary: page.text?.content ?? "",
+      visibility
+    };
+    try {
+      let row;
+      if (externalId) {
+        row = await this.client.updateEntity(campaignId, externalId, {
+          name: payload.name,
+          summary: payload.summary,
+          visibility: payload.visibility
+        });
+      } else {
+        row = await this.client.createEntity(campaignId, payload);
+        // Write the assigned id back so the next push updates instead of
+        // creating a duplicate.
+        await page.setFlag(MODULE_ID, FLAG_EXTERNAL_ID, row.id);
+      }
+      // Reveal flag — flip on the server if the page-flag disagrees.
+      const localRevealed = page.getFlag(MODULE_ID, FLAG_REVEALED_AT);
+      if (Boolean(localRevealed) !== Boolean(row.revealed_at)) {
+        await this.client.setEntityReveal(campaignId, row.id, Boolean(localRevealed));
+      }
+      await page.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      result.pushed.entities += 1;
+    } catch (err) {
+      result.failed += 1;
+      result.errors.push({
+        name: page.name,
+        message: err.message ?? String(err),
+        body: err.body ?? null
+      });
+    }
+  }
+
+  async _pushNotePage(campaignId, page, result) {
+    const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+    const visibility = page.getFlag(MODULE_ID, FLAG_VISIBILITY) ?? "campaign";
+    const payload = {
+      title: page.name,
+      body: page.text?.content ?? "",
+      visibility
+    };
+    try {
+      let row;
+      if (externalId) {
+        row = await this.client.updateNote(campaignId, externalId, payload);
+      } else {
+        row = await this.client.createNote(campaignId, payload);
+        await page.setFlag(MODULE_ID, FLAG_EXTERNAL_ID, row.id);
+      }
+      await page.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      result.pushed.notes += 1;
+    } catch (err) {
+      result.failed += 1;
+      result.errors.push({
+        name: page.name,
+        message: err.message ?? String(err),
+        body: err.body ?? null
+      });
+    }
+  }
+
+  async _pushSessionPlan(campaignId, sessionId, result) {
+    const journal = game.journal.contents.find(
+      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "session"
+    );
+    if (!journal) return;
+
+    // Map page name → text content. We treat pages by canonical name rather
+    // than by id so a GM accidentally renaming the journal still pushes.
+    const byName = new Map();
+    for (const p of journal.pages.contents) byName.set(p.name, p);
+
+    const partial = {};
+    const gmNotes = byName.get(SESSION_PAGE_GM_NOTES);
+    if (gmNotes && gmNotes.getFlag(MODULE_ID, FLAG_DIRTY)) {
+      partial.gm_notes = gmNotes.text?.content ?? "";
+    }
+    const secrets = byName.get(SESSION_PAGE_SECRETS);
+    if (secrets && secrets.getFlag(MODULE_ID, FLAG_DIRTY)) {
+      // The server returns 403 if the token lacks sessions:secrets — bubble
+      // it up so E13 can toast the friendly error.
+      partial.gm_secrets = secrets.text?.content ?? "";
+    }
+    // We don't push agenda or pinned today — they're rendered HTML on pull;
+    // round-tripping needs a structured editor (out of scope for v1).
+
+    if (Object.keys(partial).length === 0) return;
+
+    try {
+      await this.client.updateSessionPlan(campaignId, sessionId, partial);
+      if (gmNotes) await gmNotes.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      if (secrets && partial.gm_secrets !== undefined) {
+        await secrets.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      }
+      result.pushed.sessionPlan = true;
+    } catch (err) {
+      result.failed += 1;
+      result.errors.push({
+        name: "session-plan",
+        message: err.message ?? String(err),
+        body: err.body ?? null
+      });
+    }
+  }
+
+  async pushAll() {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) {
+      return { error: "no_campaign_bound" };
+    }
+    const activeSessionId = game.settings.get(MODULE_ID, "activeSessionId");
+
+    const result = {
+      pushed: { entities: 0, notes: 0, sessionPlan: false, quickNotes: 0 },
+      failed: 0,
+      errors: []
+    };
+
+    await this._drainQuickNoteQueue(campaignId, activeSessionId, result);
+
+    // Entities — walk each kind-journal.
+    for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
+      const journal = game.journal.contents.find(
+        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
+      );
+      if (!journal) continue;
+      for (const page of journal.pages.contents) {
+        if (page.type !== "text") {
+          console.info(`[gmhub-vtt] skipping non-text page "${page.name}" in ${journal.name}`);
+          continue;
+        }
+        await this._pushEntityPage(campaignId, kind, page, result);
+      }
+    }
+
+    // Notes — single journal.
+    const notesJournal = game.journal.contents.find(
+      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes"
+    );
+    if (notesJournal) {
+      for (const page of notesJournal.pages.contents) {
+        if (page.type !== "text") {
+          console.info(`[gmhub-vtt] skipping non-text note page "${page.name}"`);
+          continue;
+        }
+        await this._pushNotePage(campaignId, page, result);
+      }
+    }
+
+    // Session plan — only if a session is bound.
+    if (activeSessionId) {
+      await this._pushSessionPlan(campaignId, activeSessionId, result);
+    }
+
+    return result;
+  }
+
+  // Push a single JournalEntry (the "Push to DMhub" context-menu action in
+  // main.js). Maps to the same per-page upserts pushAll does, scoped to one
+  // entry. Entry must carry flags.gmhub-vtt.kind so we know what to do with it.
+  async pushOne(entry) {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) throw new Error("no_campaign_bound");
+    const kind = entry.getFlag(MODULE_ID, FLAG_KIND);
+    const result = {
+      pushed: { entities: 0, notes: 0, sessionPlan: false, quickNotes: 0 },
+      failed: 0,
+      errors: []
+    };
+
+    if (kind === "notes") {
+      for (const page of entry.pages.contents) {
+        if (page.type !== "text") continue;
+        await this._pushNotePage(campaignId, page, result);
+      }
+    } else if (KIND_JOURNAL_NAMES[kind]) {
+      for (const page of entry.pages.contents) {
+        if (page.type !== "text") continue;
+        await this._pushEntityPage(campaignId, kind, page, result);
+      }
+    } else if (kind === "session") {
+      const sessionId = entry.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+      if (sessionId) await this._pushSessionPlan(campaignId, sessionId, result);
+    } else {
+      // Unknown / unflagged entry — don't guess.
+      throw new Error("entry_not_bound_to_dmhub");
+    }
+    return result;
+  }
+
+  // Back-compat alias for the journal context-menu hook in main.js.
+  pushJournal(entry) {
+    return this.pushOne(entry);
+  }
+
+  // Public helper for the auto-push hook in main.js: just mark the entry as
+  // dirty so the next manual Push picks it up. Used when autoPushOnUpdate
+  // is OFF (the default per Foundry SCOPE "Manual sync only.").
+  async markDirty(entry) {
+    await entry.setFlag(MODULE_ID, FLAG_DIRTY, true);
+  }
+
+  // Public helper for offline quick-note capture. Pushes to the queue; the
+  // next pushAll drains it.
+  async enqueueQuickNote(body, mentionedEntityId = null) {
+    const queue = game.settings.get(MODULE_ID, "pendingPushQueue") ?? [];
+    queue.push({ body, mentioned_entity_id: mentionedEntityId, queued_at: new Date().toISOString() });
+    await game.settings.set(MODULE_ID, "pendingPushQueue", queue);
   }
 }

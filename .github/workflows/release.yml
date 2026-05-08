@@ -1,0 +1,71 @@
+# GMhub VTT Bridge — release workflow (DMHUB-157 / E14).
+#
+# Triggers on `v*` tag. Validates that module.json#version matches the tag,
+# substitutes a versioned `download` URL into a release-only copy of the
+# manifest, zips the runtime artefacts, and uploads them to the GitHub
+# Release. Foundry's auto-update logic compares module.json#version between
+# the manifest URL and the installed copy to detect new versions.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      # actions/checkout@v4.1.7 — pinned to commit SHA per CLAUDE.md §6.
+      - name: Checkout
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+
+      - name: Validate version matches tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          MANIFEST_VERSION="$(jq -r '.version' module.json)"
+          if [[ "$MANIFEST_VERSION" != "$TAG" ]]; then
+            echo "::error::module.json#version ($MANIFEST_VERSION) does not match tag ($TAG)"
+            exit 1
+          fi
+          echo "VERSION=$TAG" >> "$GITHUB_ENV"
+
+      - name: Build versioned manifest
+        run: |
+          set -euo pipefail
+          jq --arg v "$VERSION" \
+            '.download = "https://github.com/b34rblack-glitch/GMhub-VTT/releases/download/v\($v)/module.zip"' \
+            module.json > module-released.json
+          echo "Built module-released.json with download = $(jq -r '.download' module-released.json)"
+
+      - name: Build module.zip
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          # Copy the released manifest in as `module.json` so the installed
+          # module on disk has the versioned download URL.
+          cp module-released.json dist/module.json
+          # Runtime contents — keep in lockstep with module.json#esmodules
+          # / styles / languages.
+          cp -r scripts styles templates lang dist/
+          # packs/ is optional; include if present.
+          if [[ -d packs ]]; then cp -r packs dist/; fi
+          (cd dist && zip -r ../module.zip .)
+          ls -la module.zip
+
+      # softprops/action-gh-release@v2.0.8 — pinned to commit SHA.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c062e08bd532815e2082a85e87e3ef29c3e6d191
+        with:
+          name: "v${{ env.VERSION }}"
+          generate_release_notes: true
+          files: |
+            module.zip
+            module-released.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
