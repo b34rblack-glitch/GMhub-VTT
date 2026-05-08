@@ -150,3 +150,37 @@
 .gmhub-sync details summary {
   cursor: pointer;
 }
+
+/* Inline @entity mentions inside Tiptap-rendered prose (gm_notes,
+   gm_secrets, note bodies, entity summaries). Matches the rounded chip
+   styling the GMhub web app uses for the same data. */
+.gmhub-mention {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.15);
+  color: inherit;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* Entity chips on agenda scenes (the "Gareth Stone" / "Vex the Schemer"
+   tags from the web-app session prep editor's per-scene Link entity flow). */
+.gmhub-scene-entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 4px 0 0;
+}
+
+.gmhub-scene-entity-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: rgba(120, 113, 108, 0.18);
+  font-size: 0.85em;
+  font-weight: 500;
+  white-space: nowrap;
+}

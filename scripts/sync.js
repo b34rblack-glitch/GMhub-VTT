@@ -222,22 +222,45 @@ function pinnedHtml(pinned) {
     return "<p><em>No pinned entities.</em></p>";
   }
   const items = pinned
-    .map((p) => `<li><strong>${p.entity_type}</strong>: ${p.name}</li>`)
+    .map((p) => {
+      const type = _escapeHtml(p?.entity_type ?? "");
+      const name = _escapeHtml(p?.name ?? "");
+      return `<li><strong>${type}</strong>: ${name}</li>`;
+    })
     .join("\n");
   return `<ul>\n${items}\n</ul>`;
 }
 
+// Render a session-plan agenda scene-by-scene. Scene shape (from
+// gmhub-app/src/components/session-prep/scene-list.tsx):
+//   { id, title, notes, entities: [{ id, name, entityType }],
+//     estimated_duration_min, order, ticked }
+// Pre-v0.3.5 dropped scene.entities entirely; v0.3.5 renders them as
+// chip spans after the scene notes so the linked NPCs / locations /
+// items the GM attached on the web side carry through to Foundry.
 function agendaHtml(agenda) {
   if (!Array.isArray(agenda) || agenda.length === 0) {
     return "<p><em>No agenda items.</em></p>";
   }
   const items = agenda
     .map((scene) => {
-      const dur = scene.estimated_duration_min
-        ? ` <em>(${scene.estimated_duration_min}m)</em>`
+      const title = _escapeHtml(scene?.title ?? "(untitled)");
+      const dur = scene?.estimated_duration_min
+        ? ` <em>(${Number(scene.estimated_duration_min)}m)</em>`
         : "";
-      const notes = scene.notes ? `<p>${scene.notes}</p>` : "";
-      return `<li><strong>${scene.title ?? "(untitled)"}</strong>${dur}${notes}</li>`;
+      const notes = scene?.notes ? `<p>${_escapeHtml(scene.notes)}</p>` : "";
+      const entitiesArr = Array.isArray(scene?.entities) ? scene.entities : [];
+      const entities = entitiesArr.length
+        ? `<p class="gmhub-scene-entities">${entitiesArr
+            .map((e) => {
+              const name = _escapeHtml(e?.name ?? "");
+              const type = _escapeHtml(e?.entityType ?? "");
+              const id = _escapeHtml(e?.id ?? "");
+              return `<span class="gmhub-scene-entity-chip" data-entity-type="${type}" data-entity-id="${id}">${name}</span>`;
+            })
+            .join(" ")}</p>`
+        : "";
+      return `<li><strong>${title}</strong>${dur}${notes}${entities}</li>`;
     })
     .join("\n");
   return `<ol>\n${items}\n</ol>`;
