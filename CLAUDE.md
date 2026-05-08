@@ -1,7 +1,7 @@
 # GMhub-VTT — Claude Code Context
 
 > Foundry VTT module that two-way-syncs Journal Entries with the DMhub web app.
-> Keep this file under 175 lines. Update §4 "Current Focus" at the start of each
+> Keep this file under 140 lines. Update §4 "Current Focus" at the start of each
 > new release. Everything else is stable reference.
 
 ## 0. Documentation Contract
@@ -40,6 +40,9 @@ SCOPE.md                 # Durable product scope/intent (read first)
 CLAUDE.md                # This file (agent guardrails)
 docs/EPICS.md            # Append-only shipped-feature log + backlog
 docs/SISTER_REPO.md      # Cross-repo contract with dmhub-app
+.github/
+  pull_request_template.md  # PR documentation-contract reminder
+  CODEOWNERS                # Default reviewer assignment
 ```
 
 Source layout:

@@ -118,5 +118,5 @@ These don't change scope but need answers before/during build:
 
 ## Cross-references
 
-- **DMhub-app**: `docs/integrations/gmhub-vtt-module.md` mirrors this scope on the webapp side. The DMhub Public API needed by this module is tracked in `docs/EPICS.md`.
+- **DMhub-app**: [`docs/SISTER_REPO.md`](https://github.com/b34rblack-glitch/DMhub-app/blob/main/docs/SISTER_REPO.md) is the webapp-side mirror of this scope (the resources DMhub exposes for this module). The DMhub Public API itself is tracked in their `docs/EPICS.md` (Epic E).
 - **Roadmap impact**: this module relies on the DMhub `entities`, `notes`, `session_plan`, `quick_notes`, and `sessions` tables, plus a public REST surface. Module work cannot ship without those upstream.

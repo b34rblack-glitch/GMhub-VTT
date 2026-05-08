@@ -1,0 +1,5 @@
+# Default code owner for this repository.
+# Auto-assigns reviews on every PR. See:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+*       @b34rblack-glitch
