@@ -53,6 +53,120 @@ function sessionJournalName(sessionTitle) {
   return `Session: ${sessionTitle ?? "(untitled)"}`;
 }
 
+// ---- Tiptap ProseMirror-JSON → HTML ------------------------------------
+//
+// gmhub-app stores long-form fields (entity.summary, note.body,
+// session_plan.gm_notes, session_plan.gm_secrets) as Tiptap doc JSON. The
+// API surfaces it verbatim. Foundry's JournalEntryPage `text.content` with
+// `format: 1` (HTML) renders any non-HTML string as a literal, which is
+// why v0.3.2 surfaced raw `{"type":"doc",...}` blobs in the page body.
+// This walker handles the standard ProseMirror nodes/marks plus the
+// GMhub-specific `mention` extension. Unknown nodes render their content
+// lossily (text-only).
+
+function _escapeHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function _applyMarks(html, marks) {
+  if (!Array.isArray(marks) || marks.length === 0) return html;
+  let out = html;
+  for (const mark of marks) {
+    switch (mark?.type) {
+      case "bold":      out = `<strong>${out}</strong>`; break;
+      case "italic":    out = `<em>${out}</em>`; break;
+      case "underline": out = `<u>${out}</u>`; break;
+      case "strike":    out = `<s>${out}</s>`; break;
+      case "code":      out = `<code>${out}</code>`; break;
+      case "link": {
+        const href = _escapeHtml(mark.attrs?.href ?? "#");
+        out = `<a href="${href}" rel="noopener noreferrer">${out}</a>`;
+        break;
+      }
+      // Unknown marks: don't wrap. Better to lose styling than to emit junk.
+    }
+  }
+  return out;
+}
+
+function _nodeToHtml(node) {
+  if (!node || typeof node !== "object") return "";
+  const kids = Array.isArray(node.content) ? node.content.map(_nodeToHtml).join("") : "";
+  switch (node.type) {
+    case "doc":
+      return kids;
+    case "paragraph":
+      // Empty paragraphs render as a non-breaking space so the spacing
+      // matches the web app's editor view.
+      return `<p>${kids || "&nbsp;"}</p>`;
+    case "heading": {
+      const level = Math.min(6, Math.max(1, Number(node.attrs?.level) || 1));
+      return `<h${level}>${kids}</h${level}>`;
+    }
+    case "text":
+      return _applyMarks(_escapeHtml(node.text), node.marks);
+    case "hardBreak":
+    case "hard_break":
+      return "<br>";
+    case "horizontalRule":
+    case "horizontal_rule":
+      return "<hr>";
+    case "bulletList":
+    case "bullet_list":
+      return `<ul>${kids}</ul>`;
+    case "orderedList":
+    case "ordered_list":
+      return `<ol>${kids}</ol>`;
+    case "listItem":
+    case "list_item":
+      return `<li>${kids}</li>`;
+    case "blockquote":
+      return `<blockquote>${kids}</blockquote>`;
+    case "codeBlock":
+    case "code_block":
+      return `<pre><code>${kids}</code></pre>`;
+    case "mention": {
+      // GMhub's custom mention extension: { id, label, entityType, campaignId }.
+      // We render an inline span with data-* attrs so future work can wire
+      // up click-to-open-entity without changing the stored HTML.
+      const label = _escapeHtml(node.attrs?.label ?? node.attrs?.id ?? "");
+      const entityType = _escapeHtml(node.attrs?.entityType ?? "");
+      const id = _escapeHtml(node.attrs?.id ?? "");
+      return `<span class="gmhub-mention" data-entity-type="${entityType}" data-entity-id="${id}">@${label}</span>`;
+    }
+    default:
+      // Unknown node type: render its children, drop the wrapper.
+      return kids;
+  }
+}
+
+// Convert a Tiptap doc to HTML. Accepts the parsed object, a JSON string
+// of the doc, plain HTML (returned as-is), or null/undefined (returns "").
+// Heuristic: a string starting with `{` and ending with `}` is treated as
+// JSON; anything else is passed through (covers existing pre-Tiptap rows
+// where the column already holds HTML, and the empty-string default).
+export function tiptapToHtml(input) {
+  if (input == null) return "";
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+      try {
+        return _nodeToHtml(JSON.parse(trimmed));
+      } catch {
+        return input;
+      }
+    }
+    return input;
+  }
+  if (typeof input === "object") return _nodeToHtml(input);
+  return "";
+}
+
 // Foundry's CONST.DOCUMENT_OWNERSHIP_LEVELS — read at runtime so we don't
 // import the Foundry global at module-load time.
 function ownershipLevels() {
@@ -164,7 +278,7 @@ export class SyncService {
     return {
       name: entity.name,
       type: "text",
-      text: { content: entity.summary ?? "", format: 1 /* HTML */ },
+      text: { content: tiptapToHtml(entity.summary), format: 1 /* HTML */ },
       ownership: entityVisibilityToOwnership(entity.visibility),
       flags: {
         [MODULE_ID]: {
@@ -182,7 +296,7 @@ export class SyncService {
     return {
       name: note.title ?? "Untitled note",
       type: "text",
-      text: { content: note.body ?? "", format: 1 },
+      text: { content: tiptapToHtml(note.body), format: 1 },
       ownership: entityVisibilityToOwnership(note.visibility),
       flags: {
         [MODULE_ID]: {
@@ -283,7 +397,7 @@ export class SyncService {
         await this._upsertPage(journal, `${activeSessionId}:gm_notes`, {
           name: SESSION_PAGE_GM_NOTES,
           type: "text",
-          text: { content: plan.gm_notes ?? "", format: 1 },
+          text: { content: tiptapToHtml(plan.gm_notes), format: 1 },
           ownership: gmOnly,
           flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:gm_notes`, [FLAG_DIRTY]: false } }
         });
@@ -306,7 +420,7 @@ export class SyncService {
           await this._upsertPage(journal, `${activeSessionId}:gm_secrets`, {
             name: SESSION_PAGE_SECRETS,
             type: "text",
-            text: { content: plan.gm_secrets ?? "", format: 1 },
+            text: { content: tiptapToHtml(plan.gm_secrets), format: 1 },
             ownership: gmOnly, // GM-only forever — page-level invariant.
             flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:gm_secrets`, [FLAG_DIRTY]: false } }
           });
