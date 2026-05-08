@@ -1,0 +1,87 @@
+<div class="gmhub-push-preview">
+  {{#if empty}}
+    <p class="gmhub-empty-state">{{localize "GMHUB.Dialog.PushPreview.Empty"}}</p>
+  {{else}}
+    <p>{{localize "GMHUB.Dialog.PushPreview.Body"}}</p>
+    <table class="gmhub-push-preview-counts">
+      <tbody>
+        {{#if entitiesCreate.length}}
+          <tr>
+            <th>{{localize "GMHUB.Dialog.PushPreview.EntitiesCreate"}}</th>
+            <td>{{entitiesCreate.length}}</td>
+          </tr>
+        {{/if}}
+        {{#if entitiesUpdate.length}}
+          <tr>
+            <th>{{localize "GMHUB.Dialog.PushPreview.EntitiesUpdate"}}</th>
+            <td>{{entitiesUpdate.length}}</td>
+          </tr>
+        {{/if}}
+        {{#if notesCreate.length}}
+          <tr>
+            <th>{{localize "GMHUB.Dialog.PushPreview.NotesCreate"}}</th>
+            <td>{{notesCreate.length}}</td>
+          </tr>
+        {{/if}}
+        {{#if notesUpdate.length}}
+          <tr>
+            <th>{{localize "GMHUB.Dialog.PushPreview.NotesUpdate"}}</th>
+            <td>{{notesUpdate.length}}</td>
+          </tr>
+        {{/if}}
+        {{#if sessionPlanLabel}}
+          <tr>
+            <th>{{localize "GMHUB.Dialog.PushPreview.SessionPlan"}}</th>
+            <td>{{sessionPlanLabel}}</td>
+          </tr>
+        {{/if}}
+        {{#if quickNotes}}
+          <tr>
+            <th>{{localize "GMHUB.Dialog.PushPreview.QuickNotes"}}</th>
+            <td>{{quickNotes}}</td>
+          </tr>
+        {{/if}}
+      </tbody>
+    </table>
+
+    {{#if entitiesCreate.length}}
+      <details>
+        <summary>{{localize "GMHUB.Dialog.PushPreview.EntitiesCreateList"}}</summary>
+        <ul>
+          {{#each entitiesCreate}}
+            <li><code>{{this.kind}}</code> &mdash; {{this.name}}</li>
+          {{/each}}
+        </ul>
+      </details>
+    {{/if}}
+    {{#if entitiesUpdate.length}}
+      <details>
+        <summary>{{localize "GMHUB.Dialog.PushPreview.EntitiesUpdateList"}}</summary>
+        <ul>
+          {{#each entitiesUpdate}}
+            <li><code>{{this.kind}}</code> &mdash; {{this.name}}</li>
+          {{/each}}
+        </ul>
+      </details>
+    {{/if}}
+    {{#if notesUpdate.length}}
+      <details>
+        <summary>{{localize "GMHUB.Dialog.PushPreview.NotesUpdateList"}}</summary>
+        <ul>
+          {{#each notesUpdate}}
+            <li>{{this.name}}</li>
+          {{/each}}
+        </ul>
+      </details>
+    {{/if}}
+  {{/if}}
+
+  <footer class="gmhub-dialog-buttons">
+    <button type="button" data-action="cancel">
+      <i class="fas fa-times"></i> {{localize "GMHUB.Button.Cancel"}}
+    </button>
+    <button type="button" data-action="confirm" {{#if empty}}disabled{{/if}}>
+      <i class="fas fa-cloud-upload-alt"></i> {{localize "GMHUB.Dialog.PushPreview.Confirm"}}
+    </button>
+  </footer>
+</div>

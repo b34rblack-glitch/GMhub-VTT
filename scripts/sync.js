@@ -440,6 +440,88 @@ export class SyncService {
     }
   }
 
+  // Dry-run classification of what pushAll() would do, without making any
+  // API calls. Backs the Push preview dialog (DMHUB-160). A page is "create"
+  // if it carries no externalId flag, "update" if it has the flag AND is
+  // dirty; pages clean of dirty are skipped (existing pushAll behaviour
+  // re-uploads them, but the preview classifies by intent so the GM sees
+  // only the meaningful diff).
+  previewPush() {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) return { error: "no_campaign_bound" };
+    const activeSessionId = game.settings.get(MODULE_ID, "activeSessionId");
+
+    const preview = {
+      entities: { create: [], update: [] },
+      notes: { create: [], update: [] },
+      sessionPlan: { gmNotes: false, gmSecrets: false, agenda: false, pinned: false },
+      quickNotes: 0,
+      total: 0
+    };
+
+    for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
+      const journal = game.journal.contents.find(
+        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
+      );
+      if (!journal) continue;
+      for (const page of journal.pages.contents) {
+        if (page.type !== "text") continue;
+        const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+        const dirty = page.getFlag(MODULE_ID, FLAG_DIRTY);
+        if (!externalId) {
+          preview.entities.create.push({ name: page.name, kind });
+        } else if (dirty) {
+          preview.entities.update.push({ name: page.name, kind });
+        }
+      }
+    }
+
+    const notesJournal = game.journal.contents.find(
+      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes"
+    );
+    if (notesJournal) {
+      for (const page of notesJournal.pages.contents) {
+        if (page.type !== "text") continue;
+        const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
+        const dirty = page.getFlag(MODULE_ID, FLAG_DIRTY);
+        if (!externalId) {
+          preview.notes.create.push({ name: page.name });
+        } else if (dirty) {
+          preview.notes.update.push({ name: page.name });
+        }
+      }
+    }
+
+    if (activeSessionId) {
+      const sessionJournal = game.journal.contents.find(
+        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "session"
+      );
+      if (sessionJournal) {
+        for (const page of sessionJournal.pages.contents) {
+          if (!page.getFlag(MODULE_ID, FLAG_DIRTY)) continue;
+          if (page.name === SESSION_PAGE_GM_NOTES) preview.sessionPlan.gmNotes = true;
+          else if (page.name === SESSION_PAGE_SECRETS) preview.sessionPlan.gmSecrets = true;
+          else if (page.name === SESSION_PAGE_AGENDA) preview.sessionPlan.agenda = true;
+          else if (page.name === SESSION_PAGE_PINNED) preview.sessionPlan.pinned = true;
+        }
+      }
+    }
+
+    const queue = game.settings.get(MODULE_ID, "pendingPushQueue") ?? [];
+    preview.quickNotes = queue.length;
+
+    preview.total =
+      preview.entities.create.length + preview.entities.update.length +
+      preview.notes.create.length + preview.notes.update.length +
+      (preview.sessionPlan.gmNotes ? 1 : 0) +
+      (preview.sessionPlan.gmSecrets ? 1 : 0) +
+      (preview.sessionPlan.agenda ? 1 : 0) +
+      (preview.sessionPlan.pinned ? 1 : 0) +
+      preview.quickNotes;
+
+    return preview;
+  }
+
   async pushAll() {
     const campaignId = game.settings.get(MODULE_ID, "campaignId");
     if (!campaignId) {

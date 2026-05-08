@@ -228,6 +228,28 @@ export class SyncDialog extends Application {
     });
 
     html.find('[data-action="push"]').on("click", async () => {
+      const preview = this.sync.previewPush();
+      if (preview.error === "no_campaign_bound") {
+        this._setStatus(game.i18n.localize("GMHUB.Notify.PushFailed"), preview.error);
+        return;
+      }
+      const confirmed = await new Promise((resolve) => {
+        let resolved = false;
+        const dialog = new PushPreviewDialog({
+          preview,
+          onConfirm: () => { resolved = true; resolve(true); }
+        });
+        const origClose = dialog.close.bind(dialog);
+        dialog.close = async (...args) => {
+          if (!resolved) resolve(false);
+          return origClose(...args);
+        };
+        dialog.render(true);
+      });
+      if (!confirmed) {
+        this._setStatus(game.i18n.localize("GMHUB.Notify.PushCancelled"));
+        return;
+      }
       this._setStatus(game.i18n.localize("GMHUB.Notify.Pushing"));
       try {
         const result = await safeCall(() => this.sync.pushAll());
@@ -363,6 +385,54 @@ export class LifecycleConfirmDialog extends Application {
       titleKey: `GMHUB.Dialog.LifecycleConfirm.${capitalize(action)}.Title`,
       bodyKey: `GMHUB.Dialog.LifecycleConfirm.${capitalize(action)}.Body`,
       confirmKey: `GMHUB.Button.Session${capitalize(action)}`
+    };
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    html.find('[data-action="cancel"]').on("click", () => this.close());
+    html.find('[data-action="confirm"]').on("click", () => {
+      this.onConfirm();
+      this.close();
+    });
+  }
+}
+
+export class PushPreviewDialog extends Application {
+  constructor({ preview = null, onConfirm = () => {} } = {}, options = {}) {
+    super(options);
+    this.preview = preview;
+    this.onConfirm = onConfirm;
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "gmhub-push-preview",
+      title: "Push preview",
+      template: `modules/${MODULE_ID}/templates/push-preview.hbs`,
+      width: 520,
+      height: "auto",
+      classes: ["gmhub-push-preview-dialog"]
+    });
+  }
+
+  getData() {
+    const p = this.preview ?? {};
+    const sessionPlanFields = [];
+    const sp = p.sessionPlan ?? {};
+    if (sp.gmNotes) sessionPlanFields.push("gm_notes");
+    if (sp.gmSecrets) sessionPlanFields.push("gm_secrets");
+    if (sp.agenda) sessionPlanFields.push("agenda");
+    if (sp.pinned) sessionPlanFields.push("pinned");
+    return {
+      empty: (p.total ?? 0) === 0,
+      entitiesCreate: p.entities?.create ?? [],
+      entitiesUpdate: p.entities?.update ?? [],
+      notesCreate: p.notes?.create ?? [],
+      notesUpdate: p.notes?.update ?? [],
+      sessionPlanFields,
+      sessionPlanLabel: sessionPlanFields.length ? sessionPlanFields.join(", ") : null,
+      quickNotes: p.quickNotes ?? 0
     };
   }
 

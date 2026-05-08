@@ -52,6 +52,35 @@
   color: white;
 }
 
+.gmhub-push-preview-counts {
+  width: 100%;
+  margin: 8px 0;
+  border-collapse: collapse;
+}
+
+.gmhub-push-preview-counts th {
+  text-align: left;
+  padding: 4px 8px;
+  font-weight: 600;
+}
+
+.gmhub-push-preview-counts td {
+  padding: 4px 8px;
+  text-align: right;
+}
+
+.gmhub-push-preview-dialog .gmhub-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.gmhub-empty-state {
+  font-style: italic;
+  opacity: 0.8;
+}
+
 .gmhub-sync .gmhub-status {
   background: rgba(0, 0, 0, 0.05);
   border-left: 3px solid var(--color-border-highlight);
