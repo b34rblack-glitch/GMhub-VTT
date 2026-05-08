@@ -16,6 +16,7 @@
 
 import { MODULE_ID } from "./main.js";
 import { describePingFailure, describePingResult, safeCall } from "./error-toaster.js";
+import { renderAgendaHtml, renderPinnedHtml, SESSION_PLAN_FLAGS, SESSION_PLAN_PAGE_NAMES } from "./sync.js";
 
 function statusLabel(session) {
   if (session.ended_at) return "ended";
@@ -443,6 +444,133 @@ export class PushPreviewDialog extends Application {
       this.onConfirm();
       this.close();
     });
+  }
+}
+
+// Editor for the structured agenda + pinned payloads stored on the session
+// plan's pages as flags.gmhub-vtt.{agendaItems,pinnedRefs}. On save it
+// rewrites the page flag, regenerates the rendered HTML preview, and marks
+// the page dirty so the next Push uploads the change. (DMHUB-161)
+export class AgendaEditorDialog extends Application {
+  constructor({ page, kind } = {}, options = {}) {
+    super(options);
+    this.page = page;
+    this.kind = kind; // "agenda" | "pinned"
+    const flagKey = SESSION_PLAN_FLAGS[kind];
+    const raw = page?.getFlag(MODULE_ID, flagKey) ?? [];
+    this.items = JSON.parse(JSON.stringify(Array.isArray(raw) ? raw : []));
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "gmhub-agenda-editor",
+      title: "Edit",
+      template: `modules/${MODULE_ID}/templates/agenda-editor.hbs`,
+      width: 560,
+      height: "auto",
+      classes: ["gmhub-agenda-editor-dialog"]
+    });
+  }
+
+  get title() {
+    const titleKey = this.kind === "pinned"
+      ? "GMHUB.Dialog.AgendaEditor.Title.Pinned"
+      : "GMHUB.Dialog.AgendaEditor.Title.Agenda";
+    return game.i18n.localize(titleKey);
+  }
+
+  getData() {
+    return {
+      kind: this.kind,
+      isAgenda: this.kind === "agenda",
+      isPinned: this.kind === "pinned",
+      items: this.items.map((item, idx) => ({ ...item, _idx: idx }))
+    };
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+
+    html.find('[data-action="add"]').on("click", () => {
+      if (this.kind === "agenda") {
+        this.items.push({ title: "", estimated_duration_min: 0, notes: "" });
+      } else {
+        this.items.push({ entity_type: "npc", name: "", entity_id: "" });
+      }
+      this.render(false);
+    });
+
+    html.find('[data-action="remove"]').on("click", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      if (Number.isInteger(idx)) {
+        this.items.splice(idx, 1);
+        this.render(false);
+      }
+    });
+
+    html.find('[data-action="up"]').on("click", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      if (idx > 0) {
+        [this.items[idx - 1], this.items[idx]] = [this.items[idx], this.items[idx - 1]];
+        this.render(false);
+      }
+    });
+
+    html.find('[data-action="down"]').on("click", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      if (Number.isInteger(idx) && idx < this.items.length - 1) {
+        [this.items[idx], this.items[idx + 1]] = [this.items[idx + 1], this.items[idx]];
+        this.render(false);
+      }
+    });
+
+    html.find('[data-field]').on("input change", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      const field = evt.currentTarget.dataset.field;
+      if (!Number.isInteger(idx) || !field) return;
+      const item = this.items[idx];
+      if (!item) return;
+      const value = evt.currentTarget.value;
+      if (field === "estimated_duration_min") {
+        item[field] = Number(value) || 0;
+      } else {
+        item[field] = value;
+      }
+    });
+
+    html.find('[data-action="cancel"]').on("click", () => this.close());
+
+    html.find('[data-action="save"]').on("click", async () => {
+      try {
+        const flagKey = SESSION_PLAN_FLAGS[this.kind];
+        // Strip the _idx synthetic field if any leaked through.
+        const clean = this.items.map((item) => {
+          const { _idx, ...rest } = item;
+          return rest;
+        });
+        await this.page.setFlag(MODULE_ID, flagKey, clean);
+        const html = this.kind === "agenda"
+          ? renderAgendaHtml(clean)
+          : renderPinnedHtml(clean);
+        await this.page.update({ "text.content": html });
+        await this.page.setFlag(MODULE_ID, "dirty", true);
+        ui.notifications.info(game.i18n.localize("GMHUB.Notify.AgendaSaved"));
+        this.close();
+      } catch (err) {
+        ui.notifications.error(err.message ?? String(err));
+      }
+    });
+  }
+}
+
+// Open the AgendaEditorDialog for the right kind of page. Used by the
+// page-context-menu hook in main.js.
+export function openAgendaEditorForPage(page) {
+  if (!page) return;
+  if (page.name === SESSION_PLAN_PAGE_NAMES.agenda) {
+    new AgendaEditorDialog({ page, kind: "agenda" }).render(true);
+  } else if (page.name === SESSION_PLAN_PAGE_NAMES.pinned) {
+    new AgendaEditorDialog({ page, kind: "pinned" }).render(true);
   }
 }
 

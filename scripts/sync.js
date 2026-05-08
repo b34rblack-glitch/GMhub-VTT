@@ -27,6 +27,11 @@ const FLAG_VISIBILITY = "visibility";
 const FLAG_REVEALED_AT = "revealedAt";
 const FLAG_DIRTY = "dirty";
 const FLAG_ENTITY_TYPE = "entityType";
+// Structured payloads stashed alongside the rendered HTML on agenda/pinned
+// session-plan pages, so AgendaEditorDialog can round-trip edits back to the
+// API shape on push. (DMHUB-161)
+const FLAG_AGENDA_DATA = "agendaItems";
+const FLAG_PINNED_DATA = "pinnedRefs";
 
 const KIND_JOURNAL_NAMES = {
   npc: "NPCs",
@@ -78,6 +83,24 @@ export function entityVisibilityToOwnership(visibility) {
     default:
       return { default: OBSERVER, [gmId]: OWNER };
   }
+}
+
+export const SESSION_PLAN_FLAGS = {
+  agenda: FLAG_AGENDA_DATA,
+  pinned: FLAG_PINNED_DATA
+};
+
+export const SESSION_PLAN_PAGE_NAMES = {
+  agenda: SESSION_PAGE_AGENDA,
+  pinned: SESSION_PAGE_PINNED
+};
+
+export function renderAgendaHtml(agenda) {
+  return agendaHtml(agenda);
+}
+
+export function renderPinnedHtml(pinned) {
+  return pinnedHtml(pinned);
 }
 
 function pinnedHtml(pinned) {
@@ -269,7 +292,13 @@ export class SyncService {
           type: "text",
           text: { content: agendaHtml(plan.agenda), format: 1 },
           ownership: gmOnly,
-          flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:agenda`, [FLAG_DIRTY]: false } }
+          flags: {
+            [MODULE_ID]: {
+              [FLAG_EXTERNAL_ID]: `${activeSessionId}:agenda`,
+              [FLAG_DIRTY]: false,
+              [FLAG_AGENDA_DATA]: Array.isArray(plan.agenda) ? plan.agenda : []
+            }
+          }
         });
         // GM Secrets is included only when the token's scope permitted it
         // (the server omits the field otherwise — absence is the signal).
@@ -287,7 +316,13 @@ export class SyncService {
           type: "text",
           text: { content: pinnedHtml(plan.pinned), format: 1 },
           ownership: gmOnly,
-          flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:pinned`, [FLAG_DIRTY]: false } }
+          flags: {
+            [MODULE_ID]: {
+              [FLAG_EXTERNAL_ID]: `${activeSessionId}:pinned`,
+              [FLAG_DIRTY]: false,
+              [FLAG_PINNED_DATA]: Array.isArray(plan.pinned) ? plan.pinned : []
+            }
+          }
         });
         result.pulled.sessionPlan = true;
       } catch (err) {
@@ -418,8 +453,18 @@ export class SyncService {
       // it up so E13 can toast the friendly error.
       partial.gm_secrets = secrets.text?.content ?? "";
     }
-    // We don't push agenda or pinned today — they're rendered HTML on pull;
-    // round-tripping needs a structured editor (out of scope for v1).
+    // Agenda / Pinned: round-tripped via structured page flags written by
+    // AgendaEditorDialog (DMHUB-161). The rendered HTML is regenerated on
+    // both pull and on save in the editor; the flag is the source of truth
+    // for push.
+    const agendaPage = byName.get(SESSION_PAGE_AGENDA);
+    if (agendaPage && agendaPage.getFlag(MODULE_ID, FLAG_DIRTY)) {
+      partial.agenda = agendaPage.getFlag(MODULE_ID, FLAG_AGENDA_DATA) ?? [];
+    }
+    const pinnedPage = byName.get(SESSION_PAGE_PINNED);
+    if (pinnedPage && pinnedPage.getFlag(MODULE_ID, FLAG_DIRTY)) {
+      partial.pinned = pinnedPage.getFlag(MODULE_ID, FLAG_PINNED_DATA) ?? [];
+    }
 
     if (Object.keys(partial).length === 0) return;
 
@@ -428,6 +473,12 @@ export class SyncService {
       if (gmNotes) await gmNotes.setFlag(MODULE_ID, FLAG_DIRTY, false);
       if (secrets && partial.gm_secrets !== undefined) {
         await secrets.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      }
+      if (agendaPage && partial.agenda !== undefined) {
+        await agendaPage.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      }
+      if (pinnedPage && partial.pinned !== undefined) {
+        await pinnedPage.setFlag(MODULE_ID, FLAG_DIRTY, false);
       }
       result.pushed.sessionPlan = true;
     } catch (err) {
