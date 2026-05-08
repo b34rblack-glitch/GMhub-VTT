@@ -8,16 +8,19 @@
 //     → each entity is a page within its kind-journal.
 //   notes
 //     → a single "Notes" JournalEntry, one page per note.
-//   session_plan (active session only)
-//     → a dedicated session JournalEntry with four pages:
-//        GM Notes, Agenda, GM Secrets (page-ownership GM-only forever),
-//        Pinned.
+//   sessions (windowed, v0.4.0)
+//     → prep + most-recent ended + running session each become their own
+//        JournalEntry under the auto-created "GMhub Sessions" folder, with
+//        the same four pages (GM Notes, Agenda, GM Secrets, Pinned).
 //
 // Conflict policy is direction-wins (per SCOPE): Pull overwrites Foundry,
-// Push overwrites GMhub. No merge, no per-field reconciliation.
+// Push overwrites GMhub. Session orphans (journals outside the new pull
+// window) are deleted, unless they carry unpushed dirty edits — those are
+// skipped with a warning toast so the GM can resolve before next Pull.
 //
-// Stable IDs travel via flags.gmhub-vtt.externalId on every synced page.
-// Re-syncs key off the flag; we never look up by name.
+// Stable IDs travel via flags.gmhub-vtt.externalId on every synced page
+// AND every session JournalEntry. Re-syncs key off the flag; we never look
+// up by name.
 
 import { MODULE_ID } from "./main.js";
 
@@ -43,13 +46,76 @@ const KIND_JOURNAL_NAMES = {
 };
 
 const NOTES_JOURNAL_NAME = "Notes";
+const SESSION_FOLDER_NAME = "GMhub Sessions";
 
 const SESSION_PAGE_GM_NOTES = "GM Notes";
 const SESSION_PAGE_AGENDA = "Agenda";
 const SESSION_PAGE_SECRETS = "GM Secrets";
 const SESSION_PAGE_PINNED = "Pinned";
 
-function sessionJournalName(sessionTitle) {
+// Compute the session pull window per SCOPE § Content types pulled:
+//   - all sessions in `prep` state (no started_at)
+//   - the single most-recently-ended session (largest ended_at)
+//   - the running session if any (started_at && !ended_at)
+//
+// De-duplicates by id so a session can only appear once even if matched by
+// multiple branches. Caller passes the full sessions list from
+// /api/v1/campaigns/[id]/sessions; filtering is client-side until the
+// server-side `?status=...` query param ships.
+function computeSessionWindow(sessions) {
+  const list = Array.isArray(sessions) ? sessions : [];
+  const prep = list.filter((s) => s && !s.started_at && !s.ended_at);
+  const running = list.find((s) => s && s.started_at && !s.ended_at);
+  const ended = list
+    .filter((s) => s && s.ended_at)
+    .sort((a, b) => {
+      const ta = a.ended_at ? new Date(a.ended_at).getTime() : 0;
+      const tb = b.ended_at ? new Date(b.ended_at).getTime() : 0;
+      return tb - ta;
+    });
+  const lastRecap = ended[0] ?? null;
+
+  const byId = new Map();
+  for (const s of prep) if (s?.id) byId.set(s.id, s);
+  if (running?.id) byId.set(running.id, running);
+  if (lastRecap?.id) byId.set(lastRecap.id, lastRecap);
+  return Array.from(byId.values());
+}
+
+// Format a session journal name for chronological alphabetic sort. The
+// date prefix comes from `created_at` (Foundry sorts journal names ASCII;
+// YYYY-MM-DD as a prefix means newest sessions sort to the bottom by
+// default, which matches how a GM scans "recent first" reading top-down
+// on a folder that sorts descending — Foundry lets the GM flip sort order).
+function sessionJournalName(session) {
+  const ts = session?.created_at;
+  let datePart = "????-??-??";
+  if (typeof ts === "string" && ts.length >= 10) {
+    datePart = ts.slice(0, 10);
+  }
+  const title = session?.title ?? "(untitled)";
+  return `${datePart} — ${title}`;
+}
+
+// Lazily create + return the "GMhub Sessions" folder. Idempotent on the
+// `name + type` pair: a folder of that JournalEntry-typed name is reused
+// across worlds without surprising the GM with duplicates.
+async function ensureSessionFolder() {
+  const existing = game.folders?.find?.(
+    (f) => f?.type === "JournalEntry" && f?.name === SESSION_FOLDER_NAME
+  );
+  if (existing) return existing;
+  return Folder.create({
+    name: SESSION_FOLDER_NAME,
+    type: "JournalEntry",
+    color: "#6366f1"
+  });
+}
+
+function sessionJournalName_DEPRECATED_v3(sessionTitle) {
+  // Pre-0.4.0 single-session naming. Kept only as a reference; the
+  // _upsertSessionJournal flow renames any matched legacy journal to the
+  // new YYYY-MM-DD format on the first 0.4.0+ pull.
   return `Session: ${sessionTitle ?? "(untitled)"}`;
 }
 
@@ -101,8 +167,6 @@ function _nodeToHtml(node) {
     case "doc":
       return kids;
     case "paragraph":
-      // Empty paragraphs render as a non-breaking space so the spacing
-      // matches the web app's editor view.
       return `<p>${kids || "&nbsp;"}</p>`;
     case "heading": {
       const level = Math.min(6, Math.max(1, Number(node.attrs?.level) || 1));
@@ -131,25 +195,16 @@ function _nodeToHtml(node) {
     case "code_block":
       return `<pre><code>${kids}</code></pre>`;
     case "mention": {
-      // GMhub's custom mention extension: { id, label, entityType, campaignId }.
-      // We render an inline span with data-* attrs so future work can wire
-      // up click-to-open-entity without changing the stored HTML.
       const label = _escapeHtml(node.attrs?.label ?? node.attrs?.id ?? "");
       const entityType = _escapeHtml(node.attrs?.entityType ?? "");
       const id = _escapeHtml(node.attrs?.id ?? "");
       return `<span class="gmhub-mention" data-entity-type="${entityType}" data-entity-id="${id}">@${label}</span>`;
     }
     default:
-      // Unknown node type: render its children, drop the wrapper.
       return kids;
   }
 }
 
-// Convert a Tiptap doc to HTML. Accepts the parsed object, a JSON string
-// of the doc, plain HTML (returned as-is), or null/undefined (returns "").
-// Heuristic: a string starting with `{` and ending with `}` is treated as
-// JSON; anything else is passed through (covers existing pre-Tiptap rows
-// where the column already holds HTML, and the empty-string default).
 export function tiptapToHtml(input) {
   if (input == null) return "";
   if (typeof input === "string") {
@@ -178,13 +233,9 @@ function ownershipLevels() {
 }
 
 function gmUserId() {
-  // game.users may have multiple GMs; pick the active one. The module is
-  // single-GM by design (CLAUDE.md §5 known issue).
   return game.users.find((u) => u.isGM)?.id ?? game.user.id;
 }
 
-// Map GMhub four-value visibility → Foundry page-level ownership map.
-// gm_secrets is treated separately by callers (always pinned to GM-only).
 export function entityVisibilityToOwnership(visibility) {
   const { NONE, OBSERVER, OWNER } = ownershipLevels();
   const gmId = gmUserId();
@@ -231,13 +282,6 @@ function pinnedHtml(pinned) {
   return `<ul>\n${items}\n</ul>`;
 }
 
-// Render a session-plan agenda scene-by-scene. Scene shape (from
-// gmhub-app/src/components/session-prep/scene-list.tsx):
-//   { id, title, notes, entities: [{ id, name, entityType }],
-//     estimated_duration_min, order, ticked }
-// Pre-v0.3.5 dropped scene.entities entirely; v0.3.5 renders them as
-// chip spans after the scene notes so the linked NPCs / locations /
-// items the GM attached on the web side carry through to Foundry.
 function agendaHtml(agenda) {
   if (!Array.isArray(agenda) || agenda.length === 0) {
     return "<p><em>No agenda items.</em></p>";
@@ -287,6 +331,20 @@ export class SyncService {
       name,
       flags: { [MODULE_ID]: { [FLAG_KIND]: kind, ...extraFlags } }
     });
+  }
+
+  // Find a session journal by its server-side session id. Replaces the
+  // pre-0.4.0 single-session lookup (find first with kind=session) which
+  // breaks once multiple session journals coexist in the world.
+  _findSessionJournal(sessionId) {
+    if (!sessionId) return null;
+    return (
+      game.journal.contents.find(
+        (e) =>
+          e.getFlag(MODULE_ID, FLAG_KIND) === "session" &&
+          e.getFlag(MODULE_ID, FLAG_EXTERNAL_ID) === sessionId
+      ) ?? null
+    );
   }
 
   _findPageByExternalId(journal, externalId) {
@@ -343,6 +401,96 @@ export class SyncService {
     return created.id;
   }
 
+  // Upsert a single session's JournalEntry + its four pages. Looks up by
+  // (kind=session, externalId=sessionId) so the function is safe to call
+  // multiple times in the same Pull (idempotent). On first 0.4.0+ pull
+  // against a v0.3.x install, the legacy `Session: <title>` journal is
+  // matched (same externalId), renamed to the YYYY-MM-DD format, and moved
+  // into the GMhub Sessions folder.
+  async _upsertSessionJournal(session, plan, folder) {
+    const sessionId = session?.id;
+    if (!sessionId) return null;
+    const newName = sessionJournalName(session);
+    const folderId = folder?.id ?? null;
+
+    let journal = this._findSessionJournal(sessionId);
+    if (!journal) {
+      journal = await JournalEntry.create({
+        name: newName,
+        folder: folderId,
+        flags: {
+          [MODULE_ID]: {
+            [FLAG_KIND]: "session",
+            [FLAG_EXTERNAL_ID]: sessionId
+          }
+        }
+      });
+    } else {
+      const updates = {};
+      if (journal.name !== newName) updates.name = newName;
+      if (folderId && journal.folder?.id !== folderId) updates.folder = folderId;
+      if (Object.keys(updates).length) await journal.update(updates);
+    }
+
+    const { NONE, OWNER } = ownershipLevels();
+    const gmOnly = { default: NONE, [gmUserId()]: OWNER };
+
+    await this._upsertPage(journal, `${sessionId}:gm_notes`, {
+      name: SESSION_PAGE_GM_NOTES,
+      type: "text",
+      text: { content: tiptapToHtml(plan?.gm_notes), format: 1 },
+      ownership: gmOnly,
+      flags: {
+        [MODULE_ID]: {
+          [FLAG_EXTERNAL_ID]: `${sessionId}:gm_notes`,
+          [FLAG_DIRTY]: false
+        }
+      }
+    });
+    await this._upsertPage(journal, `${sessionId}:agenda`, {
+      name: SESSION_PAGE_AGENDA,
+      type: "text",
+      text: { content: agendaHtml(plan?.agenda), format: 1 },
+      ownership: gmOnly,
+      flags: {
+        [MODULE_ID]: {
+          [FLAG_EXTERNAL_ID]: `${sessionId}:agenda`,
+          [FLAG_DIRTY]: false,
+          [FLAG_AGENDA_DATA]: Array.isArray(plan?.agenda) ? plan.agenda : []
+        }
+      }
+    });
+    if (plan && Object.prototype.hasOwnProperty.call(plan, "gm_secrets")) {
+      await this._upsertPage(journal, `${sessionId}:gm_secrets`, {
+        name: SESSION_PAGE_SECRETS,
+        type: "text",
+        text: { content: tiptapToHtml(plan.gm_secrets), format: 1 },
+        ownership: gmOnly,
+        flags: {
+          [MODULE_ID]: {
+            [FLAG_EXTERNAL_ID]: `${sessionId}:gm_secrets`,
+            [FLAG_DIRTY]: false
+          }
+        }
+      });
+    }
+    await this._upsertPage(journal, `${sessionId}:pinned`, {
+      name: SESSION_PAGE_PINNED,
+      type: "text",
+      text: { content: pinnedHtml(plan?.pinned), format: 1 },
+      ownership: gmOnly,
+      flags: {
+        [MODULE_ID]: {
+          [FLAG_EXTERNAL_ID]: `${sessionId}:pinned`,
+          [FLAG_DIRTY]: false,
+          [FLAG_PINNED_DATA]: Array.isArray(plan?.pinned) ? plan.pinned : []
+        }
+      }
+    });
+
+    return journal;
+  }
+
   // ---- dirty-detection ----
 
   _findDirtyEntries() {
@@ -359,7 +507,6 @@ export class SyncService {
     if (!campaignId) {
       return { cancelled: false, error: "no_campaign_bound" };
     }
-    const activeSessionId = game.settings.get(MODULE_ID, "activeSessionId");
 
     const dirty = this._findDirtyEntries();
     if (dirty.length && typeof confirmOverwrite === "function") {
@@ -368,7 +515,7 @@ export class SyncService {
     }
 
     const result = {
-      pulled: { entities: 0, notes: 0, sessionPlan: false },
+      pulled: { entities: 0, notes: 0, sessions: 0 },
       errors: []
     };
 
@@ -404,67 +551,64 @@ export class SyncService {
       result.errors.push({ name: NOTES_JOURNAL_NAME, message: err.message ?? String(err) });
     }
 
-    // Session plan — only if a session is bound.
-    if (activeSessionId) {
-      try {
-        const session = await this.client.getSession(campaignId, activeSessionId);
-        const plan = await this.client.getSessionPlan(campaignId, activeSessionId);
-        const journal = await this._findOrCreateJournal(
-          sessionJournalName(session.title),
-          "session",
-          { [FLAG_EXTERNAL_ID]: activeSessionId }
-        );
-        const { NONE, OWNER } = ownershipLevels();
-        const gmOnly = { default: NONE, [gmUserId()]: OWNER };
+    // Sessions — windowed (v0.4.0). Per SCOPE § Content types pulled, the
+    // window is: prep + most-recent ended + running. listSessions gives us
+    // the full list; we filter client-side and fetch the plan per session.
+    let pulledSessionIds = new Set();
+    try {
+      const sessionsList = await this.client.listSessions(campaignId);
+      const window = computeSessionWindow(sessionsList ?? []);
+      const folder = window.length > 0 ? await ensureSessionFolder() : null;
 
-        await this._upsertPage(journal, `${activeSessionId}:gm_notes`, {
-          name: SESSION_PAGE_GM_NOTES,
-          type: "text",
-          text: { content: tiptapToHtml(plan.gm_notes), format: 1 },
-          ownership: gmOnly,
-          flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:gm_notes`, [FLAG_DIRTY]: false } }
-        });
-        await this._upsertPage(journal, `${activeSessionId}:agenda`, {
-          name: SESSION_PAGE_AGENDA,
-          type: "text",
-          text: { content: agendaHtml(plan.agenda), format: 1 },
-          ownership: gmOnly,
-          flags: {
-            [MODULE_ID]: {
-              [FLAG_EXTERNAL_ID]: `${activeSessionId}:agenda`,
-              [FLAG_DIRTY]: false,
-              [FLAG_AGENDA_DATA]: Array.isArray(plan.agenda) ? plan.agenda : []
-            }
-          }
-        });
-        // GM Secrets is included only when the token's scope permitted it
-        // (the server omits the field otherwise — absence is the signal).
-        if (Object.prototype.hasOwnProperty.call(plan, "gm_secrets")) {
-          await this._upsertPage(journal, `${activeSessionId}:gm_secrets`, {
-            name: SESSION_PAGE_SECRETS,
-            type: "text",
-            text: { content: tiptapToHtml(plan.gm_secrets), format: 1 },
-            ownership: gmOnly, // GM-only forever — page-level invariant.
-            flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${activeSessionId}:gm_secrets`, [FLAG_DIRTY]: false } }
+      for (const session of window) {
+        try {
+          const plan = await this.client.getSessionPlan(campaignId, session.id);
+          await this._upsertSessionJournal(session, plan, folder);
+          pulledSessionIds.add(session.id);
+          result.pulled.sessions += 1;
+        } catch (err) {
+          result.errors.push({
+            name: `session ${sessionJournalName(session)}`,
+            message: err.message ?? String(err)
           });
         }
-        await this._upsertPage(journal, `${activeSessionId}:pinned`, {
-          name: SESSION_PAGE_PINNED,
-          type: "text",
-          text: { content: pinnedHtml(plan.pinned), format: 1 },
-          ownership: gmOnly,
-          flags: {
-            [MODULE_ID]: {
-              [FLAG_EXTERNAL_ID]: `${activeSessionId}:pinned`,
-              [FLAG_DIRTY]: false,
-              [FLAG_PINNED_DATA]: Array.isArray(plan.pinned) ? plan.pinned : []
-            }
-          }
-        });
-        result.pulled.sessionPlan = true;
-      } catch (err) {
-        result.errors.push({ name: "session-plan", message: err.message ?? String(err) });
       }
+    } catch (err) {
+      result.errors.push({ name: "sessions-list", message: err.message ?? String(err) });
+    }
+
+    // Orphan handling per SCOPE § Pull step 5: session journals outside
+    // the new window are deleted, *unless* they carry unpushed dirty edits.
+    // Skipped orphans surface as a warning toast so the GM can resolve
+    // before the next Pull.
+    const orphans = game.journal.contents.filter(
+      (e) =>
+        e.getFlag(MODULE_ID, FLAG_KIND) === "session" &&
+        !pulledSessionIds.has(e.getFlag(MODULE_ID, FLAG_EXTERNAL_ID))
+    );
+    const skippedDirty = [];
+    for (const orphan of orphans) {
+      const dirtyEntry = orphan.getFlag(MODULE_ID, FLAG_DIRTY);
+      const dirtyPage = orphan.pages.contents.some((p) => p.getFlag(MODULE_ID, FLAG_DIRTY));
+      if (dirtyEntry || dirtyPage) {
+        skippedDirty.push(orphan.name);
+        continue;
+      }
+      try {
+        await orphan.delete();
+      } catch (err) {
+        result.errors.push({
+          name: `orphan ${orphan.name}`,
+          message: err.message ?? String(err)
+        });
+      }
+    }
+    if (skippedDirty.length) {
+      ui.notifications?.warn(
+        `[gmhub-vtt] Skipped ${skippedDirty.length} stale session journal(s) with unpushed edits: ${skippedDirty.join(
+          ", "
+        )}. Push or delete manually before next Pull.`
+      );
     }
 
     await game.settings.set(MODULE_ID, "lastPullAt", new Date().toISOString());
@@ -519,11 +663,8 @@ export class SyncService {
         });
       } else {
         row = await this.client.createEntity(campaignId, payload);
-        // Write the assigned id back so the next push updates instead of
-        // creating a duplicate.
         await page.setFlag(MODULE_ID, FLAG_EXTERNAL_ID, row.id);
       }
-      // Reveal flag — flip on the server if the page-flag disagrees.
       const localRevealed = page.getFlag(MODULE_ID, FLAG_REVEALED_AT);
       if (Boolean(localRevealed) !== Boolean(row.revealed_at)) {
         await this.client.setEntityReveal(campaignId, row.id, Boolean(localRevealed));
@@ -568,14 +709,16 @@ export class SyncService {
     }
   }
 
+  // Push the session-plan dirty pages of one specific session journal. The
+  // pre-0.4.0 implementation found "the" session journal by kind=session
+  // alone, which silently picked the first one when multiple coexist;
+  // v0.4.0 looks up by externalId so the right journal is pushed. PR
+  // 0.4.0-δ will iterate this across all session journals; until then
+  // pushAll calls it only for the active session (existing behaviour).
   async _pushSessionPlan(campaignId, sessionId, result) {
-    const journal = game.journal.contents.find(
-      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "session"
-    );
+    const journal = this._findSessionJournal(sessionId);
     if (!journal) return;
 
-    // Map page name → text content. We treat pages by canonical name rather
-    // than by id so a GM accidentally renaming the journal still pushes.
     const byName = new Map();
     for (const p of journal.pages.contents) byName.set(p.name, p);
 
@@ -586,14 +729,8 @@ export class SyncService {
     }
     const secrets = byName.get(SESSION_PAGE_SECRETS);
     if (secrets && secrets.getFlag(MODULE_ID, FLAG_DIRTY)) {
-      // The server returns 403 if the token lacks sessions:secrets — bubble
-      // it up so E13 can toast the friendly error.
       partial.gm_secrets = secrets.text?.content ?? "";
     }
-    // Agenda / Pinned: round-tripped via structured page flags written by
-    // AgendaEditorDialog (GMHUB-161). The rendered HTML is regenerated on
-    // both pull and on save in the editor; the flag is the source of truth
-    // for push.
     const agendaPage = byName.get(SESSION_PAGE_AGENDA);
     if (agendaPage && agendaPage.getFlag(MODULE_ID, FLAG_DIRTY)) {
       partial.agenda = agendaPage.getFlag(MODULE_ID, FLAG_AGENDA_DATA) ?? [];
@@ -621,19 +758,13 @@ export class SyncService {
     } catch (err) {
       result.failed += 1;
       result.errors.push({
-        name: "session-plan",
+        name: `session-plan ${journal.name}`,
         message: err.message ?? String(err),
         body: err.body ?? null
       });
     }
   }
 
-  // Dry-run classification of what pushAll() would do, without making any
-  // API calls. Backs the Push preview dialog (GMHUB-160). A page is "create"
-  // if it carries no externalId flag, "update" if it has the flag AND is
-  // dirty; pages clean of dirty are skipped (existing pushAll behaviour
-  // re-uploads them, but the preview classifies by intent so the GM sees
-  // only the meaningful diff).
   previewPush() {
     const campaignId = game.settings.get(MODULE_ID, "campaignId");
     if (!campaignId) return { error: "no_campaign_bound" };
@@ -680,10 +811,11 @@ export class SyncService {
       }
     }
 
+    // Session-plan preview: still scoped to the active session in 0.4.0-β,
+    // matching pushAll's behaviour. PR 0.4.0-δ fans this out across all
+    // session journals.
     if (activeSessionId) {
-      const sessionJournal = game.journal.contents.find(
-        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "session"
-      );
+      const sessionJournal = this._findSessionJournal(activeSessionId);
       if (sessionJournal) {
         for (const page of sessionJournal.pages.contents) {
           if (!page.getFlag(MODULE_ID, FLAG_DIRTY)) continue;
@@ -725,7 +857,6 @@ export class SyncService {
 
     await this._drainQuickNoteQueue(campaignId, activeSessionId, result);
 
-    // Entities — walk each kind-journal.
     for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
       const journal = game.journal.contents.find(
         (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
@@ -740,7 +871,6 @@ export class SyncService {
       }
     }
 
-    // Notes — single journal.
     const notesJournal = game.journal.contents.find(
       (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes"
     );
@@ -754,7 +884,8 @@ export class SyncService {
       }
     }
 
-    // Session plan — only if a session is bound.
+    // Active session plan only in 0.4.0-β. PR 0.4.0-δ walks all dirty
+    // session journals and routes each push to its own sessionId.
     if (activeSessionId) {
       await this._pushSessionPlan(campaignId, activeSessionId, result);
     }
@@ -762,9 +893,6 @@ export class SyncService {
     return result;
   }
 
-  // Push a single JournalEntry (the "Push to GMhub" context-menu action in
-  // main.js). Maps to the same per-page upserts pushAll does, scoped to one
-  // entry. Entry must carry flags.gmhub-vtt.kind so we know what to do with it.
   async pushOne(entry) {
     const campaignId = game.settings.get(MODULE_ID, "campaignId");
     if (!campaignId) throw new Error("no_campaign_bound");
@@ -789,26 +917,19 @@ export class SyncService {
       const sessionId = entry.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
       if (sessionId) await this._pushSessionPlan(campaignId, sessionId, result);
     } else {
-      // Unknown / unflagged entry — don't guess.
       throw new Error("entry_not_bound_to_gmhub");
     }
     return result;
   }
 
-  // Back-compat alias for the journal context-menu hook in main.js.
   pushJournal(entry) {
     return this.pushOne(entry);
   }
 
-  // Public helper for the auto-push hook in main.js: just mark the entry as
-  // dirty so the next manual Push picks it up. Used when autoPushOnUpdate
-  // is OFF (the default per Foundry SCOPE "Manual sync only.").
   async markDirty(entry) {
     await entry.setFlag(MODULE_ID, FLAG_DIRTY, true);
   }
 
-  // Public helper for offline quick-note capture. Pushes to the queue; the
-  // next pushAll drains it.
   async enqueueQuickNote(body, mentionedEntityId = null) {
     const queue = game.settings.get(MODULE_ID, "pendingPushQueue") ?? [];
     queue.push({ body, mentioned_entity_id: mentionedEntityId, queued_at: new Date().toISOString() });
