@@ -25,8 +25,8 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
 | Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.3.0` |
-| Foundry compat | v11 minimum, v12 verified, v13 maximum (v13 install allowed; runtime verification pending) |
+| Current version | `0.3.1` |
+| Foundry compat | v11 minimum, v14 verified, v14 maximum |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
 
@@ -77,13 +77,13 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 > **Update this section at the start of every new release.**
 
-`v0.3.0` closes the four feature gaps that v0.2.0 left open so a GM can run a full session lifecycle without leaving Foundry: Start/Pause/Resume/End buttons in `SyncDialog` (GMHUB-159), a push diff preview dialog that confirms before any API write (GMHUB-160), a structured Agenda + Pinned editor that round-trips edits via page flags (GMHUB-161), and a `module.json#compatibility.maximum` bump to `"13"` so the module installs in Foundry v13 (GMHUB-162; runtime `verified` stays at `"12"` until the integration test runs against v13). All shipped under GMHUB-158 epic. The cross-repo gate is still `docs/integration-test.md` (now exercising 21/21 steps including lifecycle).
+`v0.3.1` is a compatibility-only release. Foundry v14 shipped, so `module.json#compatibility.verified` and `maximum` both move to `"14"`; `minimum` stays at `"11"`. No code changes — the v0.3.0 feature surface (session lifecycle controls, push diff preview, Agenda + Pinned editor) is unchanged. README compat lines and the v13-readiness debt row in §5 are dropped accordingly. Closes GMV-4; the still-open ApplicationV2 migration is now the lone v0.4.0 candidate.
 
 ## 5. Known Issues & Tech Debt
 
 | Priority | Issue | Notes |
 |---|---|---|
-| 🟡 Med | Foundry v13 runtime verification pending | Manifest now allows v13 install (max `"13"`); `verified` stays `"12"` until a GM walks `docs/integration-test.md` in a v13 world. Application V1 is deprecated in v13 (still functional); migration to ApplicationV2 deferred to v0.4.0. GMHUB-162. |
+| 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog and editors are V1; migration to ApplicationV2 deferred to v0.4.0. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. Consider Quench or a stub Foundry environment if churn warrants it. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 
@@ -107,7 +107,7 @@ git clone https://github.com/b34rblack-glitch/GMhub-VTT.git "$FOUNDRY_DATA/modul
 # 1. Bump module.json#version
 # 2. Tag and push:  git tag v0.X.Y && git push origin v0.X.Y
 # 3. Add release row in docs/EPICS.md
-# 4. Build a zip of the repo at the tag and attach to the GitHub release
+# 4. release.yml builds module.zip + versioned module.json on tag push
 ```
 
 ## 8. Claude Code Tips for This Repo
@@ -115,6 +115,6 @@ git clone https://github.com/b34rblack-glitch/GMhub-VTT.git "$FOUNDRY_DATA/modul
 - The module is small (~600 LOC across 4 JS files); whole-file reads are fine.
 - Always read `module.json` first when editing — the `esmodules`/`styles`/`languages` arrays gate what Foundry loads.
 - **Read `SCOPE.md` before agreeing to a feature.** If a request would cross an out-of-scope line, surface that explicitly rather than implementing.
-- Foundry's API is undocumented in `node_modules`; reference docs live at https://foundryvtt.com/api/v12/ — fetch live if needed.
+- Foundry's API is undocumented in `node_modules`; reference docs live at https://foundryvtt.com/api/v14/ — fetch live if needed.
 - When `gmhub-app` changes the `/api/v1` surface (Epic E), this module's `api-client.js` follows. Bump `module.json#version` for any consumer-facing change.
 - **Don't create `AUDIT_REPORT.md` or `audits/` files.** See §0 Documentation Contract — audit findings go in PR descriptions, not committed Markdown.
