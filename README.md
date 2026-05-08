@@ -2,7 +2,7 @@
 
 > The Foundry VTT module that brings GMhub into the live game session.
 
-A Foundry VTT module that two-way-syncs GMhub campaign content with Foundry **journals only** — no scenes, actors, or background sync. Built for Foundry v11/v12, D&D 5e system.
+A Foundry VTT module that two-way-syncs GMhub campaign content with Foundry **journals only** — no scenes, actors, or background sync. Built for Foundry v11–v14, D&D 5e system.
 
 The durable product scope (mission, workflow position, in-scope / out-of-scope, behaviour contracts) lives in [`SCOPE.md`](./SCOPE.md). Read that first if you're trying to understand what this module is and isn't.
 
@@ -34,7 +34,7 @@ For the cross-repo contract see [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md).
 | | |
 |---|---|
 | Module version | `0.2.0` |
-| Foundry compatibility | v11–v12 (verified v12); v13 readiness tracked in [`docs/EPICS.md`](docs/EPICS.md) |
+| Foundry compatibility | v11–v14 (verified v14) |
 | System | dnd5e ≥3.0 |
 | Shipped feature log | [`docs/EPICS.md`](docs/EPICS.md) |
 | Upstream dependency | `gmhub-app` Epic E — Public API & Foundry Foundations (✅ shipped 2026-05-08) |
@@ -66,7 +66,7 @@ The cross-repo end-to-end gate is the seventeen-step checklist in [`docs/integra
 https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json
 ```
 
-> Compatibility: Foundry v12 (verified), D&D 5e system 3.0+. v13 readiness tracked in [`SCOPE.md`](SCOPE.md).
+> Compatibility: Foundry v14 (verified), D&D 5e system 3.0+.
 
 ## Configuration
 
@@ -106,4 +106,3 @@ Roadmap (high level; the full backlog lives in [`docs/EPICS.md`](docs/EPICS.md))
 - Actor sync (5e character sheets ↔ GMhub)
 - Scene/map import
 - Webhook-driven live updates instead of polling
-- Foundry v13 compatibility
