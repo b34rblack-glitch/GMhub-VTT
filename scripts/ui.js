@@ -144,16 +144,12 @@ export class SyncDialog extends Application {
   activateListeners(html) {
     super.activateListeners(html);
 
-    // First open of the dialog: lazily fetch the bound session's status so the
-    // lifecycle button row can render. Re-renders triggered by _setStatus skip
-    // this fetch (state already cached).
     if (this.sessionStatus === null && this.sessionStatusError === null) {
       const sessionId = game.settings.get(MODULE_ID, "activeSessionId");
       if (sessionId) this._refreshSessionStatus().then(() => this.render(false));
     }
 
     html.find('[data-action="open-settings"]').on("click", () => {
-      // Foundry's standard way of opening Module Settings for a specific module.
       const settingsApp = new SettingsConfig();
       settingsApp.render(true, { focus: true });
     });
@@ -217,8 +213,10 @@ export class SyncDialog extends Application {
           this._setStatus(game.i18n.localize("GMHUB.Notify.PullCancelled"));
           return;
         }
-        const r = result?.pulled ?? { entities: 0, notes: 0, sessionPlan: false };
-        const summary = `entities: ${r.entities}, notes: ${r.notes}, session plan: ${r.sessionPlan ? "yes" : "no"}`;
+        // 0.4.0: result.pulled.sessions is a count of session journals
+        // pulled (was sessionPlan: boolean).
+        const r = result?.pulled ?? { entities: 0, notes: 0, sessions: 0 };
+        const summary = `entities: ${r.entities}, notes: ${r.notes}, sessions: ${r.sessions}`;
         const errs = (result?.errors ?? []).map((e) => `${e.name}: ${e.message}`).join("\n");
         this._setStatus(
           game.i18n.localize("GMHUB.Notify.PullDone"),
@@ -258,8 +256,10 @@ export class SyncDialog extends Application {
       this._setStatus(game.i18n.localize("GMHUB.Notify.Pushing"));
       try {
         const result = await safeCall(() => this.sync.pushAll());
-        const p = result?.pushed ?? { entities: 0, notes: 0, sessionPlan: false, quickNotes: 0 };
-        const summary = `entities: ${p.entities}, notes: ${p.notes}, session plan: ${p.sessionPlan ? "yes" : "no"}, quick notes: ${p.quickNotes}`;
+        // 0.4.0: result.pushed.sessionPlans is a count of session journals
+        // pushed (was sessionPlan: boolean).
+        const p = result?.pushed ?? { entities: 0, notes: 0, sessionPlans: 0, quickNotes: 0 };
+        const summary = `entities: ${p.entities}, notes: ${p.notes}, sessions: ${p.sessionPlans}, quick notes: ${p.quickNotes}`;
         const errs = (result?.errors ?? []).map((e) => `${e.name}: ${e.message}`).join("\n");
         this._setStatus(
           `${game.i18n.localize("GMHUB.Notify.PushDone")} (${result?.failed ?? 0} failed)`,
@@ -353,6 +353,11 @@ export class PushPreviewDialog extends Application {
       notesUpdate: p.notes?.update ?? [],
       sessionPlanFields,
       sessionPlanLabel: sessionPlanFields.length ? sessionPlanFields.join(", ") : null,
+      // 0.4.0-δ: per-session breakdown for templates that want to show
+      // *which* sessions are dirty. Existing template renders the
+      // aggregated label above; future template work (GMV-9) can switch
+      // to this list.
+      sessionPlanJournals: p.sessionPlanJournals ?? [],
       quickNotes: p.quickNotes ?? 0
     };
   }
@@ -463,7 +468,6 @@ export class AgendaEditorDialog extends Application {
     html.find('[data-action="save"]').on("click", async () => {
       try {
         const flagKey = SESSION_PLAN_FLAGS[this.kind];
-        // Strip the _idx synthetic field if any leaked through.
         const clean = this.items.map((item) => {
           const { _idx, ...rest } = item;
           return rest;
@@ -483,8 +487,6 @@ export class AgendaEditorDialog extends Application {
   }
 }
 
-// Open the AgendaEditorDialog for the right kind of page. Used by the
-// page-context-menu hook in main.js.
 export function openAgendaEditorForPage(page) {
   if (!page) return;
   if (page.name === SESSION_PLAN_PAGE_NAMES.agenda) {
@@ -529,9 +531,6 @@ export class ConfirmOverwriteDialog extends Application {
   }
 }
 
-// GMHUB-153 (E10). FormApplication subclass — even though we don't submit a
-// form, FormApplication gives us focus management + close-on-Escape semantics
-// without rolling our own.
 export class PickSessionDialog extends Application {
   constructor(client, options = {}) {
     super(options);
@@ -566,8 +565,6 @@ export class PickSessionDialog extends Application {
     this.error = null;
     this.render(false);
     try {
-      // E11 ships listSessions; until then it returns an empty array. The
-      // template already renders the empty-state message in that case.
       const sessions = (typeof this.client.listSessions === "function")
         ? await this.client.listSessions(campaignId)
         : [];
