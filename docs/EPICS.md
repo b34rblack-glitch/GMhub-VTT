@@ -36,19 +36,26 @@
 | GMV-2 | Scene / map import | Push Foundry scenes as `campaign_maps` rows in GMhub. Out of scope per current `SCOPE.md`. |
 | GMV-3 | Webhook-driven live updates | Replace pull-on-demand with push notifications from `gmhub-app`. Out of scope per current `SCOPE.md` (manual-only). |
 | GMV-5 | Migrate to ApplicationV2 | Sync dialog and editors use ApplicationV1, deprecated in v13+ but still functional in v14. |
-| GMV-6 | Push HTML ↔ Tiptap round-trip | Pull renders HTML correctly; Push still sends raw HTML to a JSON-expecting API. Server-side HTML acceptance in `gmhub-app` is the preferred fix. **High priority** — only debt that breaks documented behaviour. |
 | GMV-7 | AgendaEditor: add/edit per-scene entity links | Existing scenes preserve `entities` on push; the editor has no UI to attach/detach links. |
 | GMV-8 | Manual fetch of older recaps | Outside the windowed pull, GMs may want one-off access to a specific past session. Tracked in `SCOPE.md` as open design decision #7. |
+
+**Closed:**
+
+- **GMV-6** — Push HTML ↔ Tiptap round-trip. **Closed 2026-05-09 server-side**, see Reconciliation below.
+- **GMV-9** — PushPreviewDialog per-session breakdown. Closed in v0.4.4.
+- **GMV-10** — Cross-repo pin reason. Server-side shipped in `gmhub-app` 2026-05-09; rendered by v0.4.1+.
 
 ## Upstream dependencies (in `gmhub-app`)
 
 | Their Epic | Why it matters here |
 |---|---|
 | **Epic E — Public API & Foundry Foundations** *(shipped 2026-05-08)* | Owns the `/api/v1` REST surface this module consumes, plus personal-access-token issuance. |
+| **Epic E follow-ups** *(shipped 2026-05-09)* | CORS for `/api/v1/*`, `pin_reason` schema + API + UI (GMV-10), Live/Recap parity tabs, server-side HTML→Tiptap normalization on PATCH (GMV-6), build script `prisma migrate deploy`. |
 | **Epic G — Foundry VTT Module** *(planned)* | Their tracking of *this repo*. Bidirectional. |
 
 ## Reconciliation
 
 If a feature lands in this module but isn't reflected in `gmhub-app`'s Epic G or vice-versa, log it here so the two logs can be synced on the next pass.
 
-*(empty — no drift yet.)*
+- **GMV-6 (Push HTML ↔ Tiptap)** closed server-side, not in this module. Resolved via `gmhub-app` PR #64 (2026-05-09): `/api/v1` PATCH routes for entities, notes, and session plans now normalize HTML → Tiptap-JSON via `@tiptap/html.generateJSON` (jsdom polyfill on Vercel). This module ships no code change; Push round-trips losslessly from v0.4.4 onward. Verified end-to-end with the Senna Blackwater NPC test on 2026-05-09. Build-pipeline follow-ups in `gmhub-app` PR #65 (pin `@tiptap/html@3.22.5` to dodge an ERESOLVE) and PR #66 (render `gm_secrets` client-side, since Turbopack disallows `react-dom/server` in App Router server components).
+- **GMV-10 (cross-repo pin reason)** server-side shipped in `gmhub-app` PR #60 (schema migration + API + web UI). v0.4.1's render path was forward-compatible — no second module release needed.
