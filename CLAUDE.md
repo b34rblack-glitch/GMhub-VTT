@@ -9,10 +9,10 @@
 Five files are the canonical documentation. Keep them in sync on every PR that ships:
 
 1. **`README.md`** — landing page. Vision, status snapshot, install/config; defers to other docs for detail.
-2. **`SCOPE.md`** — durable product scope and intent. Mission, workflow position, in-scope / out-of-scope, behaviour contracts, open design decisions. **Edit only when scope itself changes** — additions, removals, behavioural shifts. README and `docs/EPICS.md` reference this; do not duplicate scope material there.
+2. **`SCOPE.md`** — durable product scope and intent. **Edit only when scope itself changes.**
 3. **`docs/EPICS.md`** — append-only shipped-feature log + open backlog. **Add a row when any feature ships;** never edit historical rows.
 4. **`CLAUDE.md`** *(this file)* — update §4 "Current Focus" at release start; update §5 "Known Issues" when you fix or add tech debt.
-5. **`docs/SISTER_REPO.md`** — only edit when the cross-repo contract with `gmhub-app` changes (auth model, who owns the API surface, etc.).
+5. **`docs/SISTER_REPO.md`** — only edit when the cross-repo contract with `gmhub-app` changes.
 
 **Do not create new top-level Markdown files** beyond these five.
 
@@ -25,7 +25,7 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
 | Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.4.1` |
+| Current version | `0.4.2` |
 | Foundry compat | v11 minimum, v14 verified, v14 maximum |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
@@ -41,8 +41,8 @@ CLAUDE.md                # This file (agent guardrails)
 docs/EPICS.md            # Append-only shipped-feature log + backlog
 docs/SISTER_REPO.md      # Cross-repo contract with gmhub-app
 .github/
-  pull_request_template.md  # PR documentation-contract reminder
-  CODEOWNERS                # Default reviewer assignment
+  pull_request_template.md
+  CODEOWNERS
 ```
 
 Source layout:
@@ -50,12 +50,12 @@ Source layout:
 ```
 module.json              # Foundry manifest
 scripts/
-  main.js                # Module entry; hooks init, ready, getJournalDirectoryEntryContext; v14 i18n shim
+  main.js                # Module entry; hooks init, ready, getJournalDirectoryEntryContext; v14 i18n shim + Handlebars helper re-register
   api-client.js          # REST client: ping, list, get, create, update; bearer auth
   sync.js                # Push/pull orchestration; windowed session pull; tiptapToHtml; pinned-card render
   ui.js                  # Sync dialog, session pick, push preview, agenda editor
 styles/
-  gmhub.css              # Module-specific UI styling (chips, dialogs, sync button, pinned cards)
+  gmhub.css              # Module-specific UI styling
 templates/               # Handlebars templates for the sync dialog
 lang/
   en.json                # i18n strings
@@ -68,33 +68,31 @@ No build step — the module is plain ES modules loaded by Foundry directly.
 This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1` REST endpoints exposed under **Epic E — Public API & Foundry Foundations** in `gmhub-app`.
 
 - **`gmhub-app` owns the API surface.** Endpoint shapes, auth model, and token issuance all live there.
-- **This module owns its consumption side and its scope.** What we sync (content types, push/pull semantics, conflict policy) is documented in `SCOPE.md`; the wire format mirrors what Epic E exposes.
+- **This module owns its consumption side and its scope.** What we sync (content types, push/pull semantics, conflict policy) is documented in `SCOPE.md`.
 - **Wire format detail:**
   - `entity.summary`, `note.body`, `session_plan.gm_notes`, `session_plan.gm_secrets` are Tiptap ProseMirror-JSON — rendered to HTML on pull via `tiptapToHtml` in `sync.js`. Push is currently lossy (sends HTML back, GMV-6).
-  - `session_plan.agenda` is opaque JSON server-side; canonical Scene shape `{ id, title, notes, entities: [{id, name, entityType}], estimated_duration_min, order, ticked }`. `agendaHtml()` renders title + duration + notes + entity chips (clickable Foundry content-links when the referenced entity is synced).
-  - **Pinned shape:** `{ entity_id, entity_type, name, staged_at, position, pin_reason? }`. The `pin_reason` field is forward-compatible — v0.4.1 renders it when present, no-ops when absent. The gmhub-app pin-reason feature populates it. Tracked as GMV-10.
-  - **Visibility ride-along.** Foundry's per-page eye icon (`page.ownership.default`) reverse-maps to `visibility`: `NONE` → `gm_only`, `OBSERVER` → `campaign`. The page-update hook writes the new value into `flags.gmhub-vtt.visibility` so the next Push includes it.
-  - **Windowed session pull (v0.4.0).** `listSessions` is filtered client-side to: prep + most-recent ended + running. One JournalEntry per pulled session under the `GMhub Sessions` folder; orphans are deleted on Pull unless they carry unpushed dirty edits.
+  - `session_plan.agenda` is opaque JSON server-side; canonical Scene shape `{ id, title, notes, entities: [{id, name, entityType}], estimated_duration_min, order, ticked }`.
+  - **Pinned shape:** `{ entity_id, entity_type, name, staged_at, position, pin_reason? }`. The `pin_reason` field is a cross-repo addition (GMV-10) — v0.4.1+ renders it when present.
+  - **Visibility ride-along.** Foundry's per-page eye icon (`page.ownership.default`) reverse-maps to `visibility`: `NONE` → `gm_only`, `OBSERVER` → `campaign`.
+  - **Windowed session pull (v0.4.0).** `listSessions` is filtered client-side to: prep + most-recent ended + running. Orphans are deleted on Pull unless they carry unpushed dirty edits.
 - Either side changes the contract → the other side's `docs/EPICS.md` gets a follow-up row.
-
-See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 
 ## 4. Current Focus
 
 > **Update this section at the start of every new release.**
 
-`v0.4.1` enriches the Pinned page on session journals: per-pin cards with type chip, clickable Foundry content-link (opens the entity page in Foundry on click), and a first-paragraph blurb pulled from the entity's already-synced summary. Empty-state row when the pin references an entity not in this Foundry world (cross-campaign, deleted, or not yet pulled). Drive-by: per-scene entity chips on the Agenda page also become clickable content-links when the referenced entity is synced. Forward-compatible with the cross-repo `pin_reason` feature in `gmhub-app` (GMV-10): when the API starts returning `pin_reason`, the cards render it as a quoted blockquote line below the blurb — no second module release needed.
+`v0.4.2` is a forced republish of `v0.4.1`. Foundry's update check compares `module.json#version`, not the commit SHA the tag points to — so re-tagging `v0.4.1` after a hotfix didn't trigger Foundry to fetch the new zip. Bumped to `0.4.2` to make the Handlebars-helper re-register fix from late-`v0.4.1` actually reach installed worlds. Lesson learned: **when shipping a fix mid-release, bump the version BEFORE tagging.** v0.4.1's payload — per-pin cards, clickable agenda chips, forward-compatible `pin_reason` rendering, and the Handlebars `{{localize}}` / `{{localizeFormat}}` helper re-register — ships unchanged in v0.4.2.
 
 ## 5. Known Issues & Tech Debt
 
 | Priority | Issue | Notes |
 |---|---|---|
-| 🟠 High | Push is lossy on rich-text fields | Pull renders Tiptap JSON → HTML, but Push sends `page.text.content` (HTML) back to gmhub-app whose API expects Tiptap JSON. Tracked as GMV-6. |
-| 🟡 Med | AgendaEditorDialog can't add/edit per-scene entity links | Existing scenes round-trip their `entities` array via the page flag; the in-Foundry editor has no UI to attach/detach links. Tracked as GMV-7. |
-| 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog and editors are V1; migration deferred to v0.5+. |
-| 🟢 Low | Cross-campaign session journals can leak through Push | Switching campaigns leaves the old campaign's session journals in Foundry until the next Pull's orphan cleanup. A Push between switch + Pull would 404 on stale sessions. |
-| 🟢 Low | Eye toggle is buffered, not immediate | Per `SCOPE.md` "Manual sync only." The eye click maps to `flags.gmhub-vtt.visibility` and waits for the next Push (or auto-pushes when the opt-in setting is on). |
-| 🟢 Low | Root cause of v14 lang auto-load failure unknown | v0.3.4 ships a defensive `localize()` wrapper that bypasses Foundry's internal store. Underlying behaviour is undiagnosed. |
+| 🟠 High | Push is lossy on rich-text fields | Pull renders Tiptap JSON → HTML; Push sends HTML back to a JSON-expecting API. Tracked as GMV-6. |
+| 🟡 Med | AgendaEditorDialog can't add/edit per-scene entity links | Existing scenes preserve `entities` on push; the editor has no UI to attach/detach links. Tracked as GMV-7. |
+| 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog + editors are V1; migration deferred to v0.5+. |
+| 🟢 Low | Cross-campaign session journals can leak through Push | Switching campaigns leaves the old campaign's session journals in Foundry until the next Pull's orphan cleanup. |
+| 🟢 Low | Eye toggle is buffered, not immediate | Per `SCOPE.md` "Manual sync only." Eye click maps to `flags.gmhub-vtt.visibility` and waits for the next Push. |
+| 🟢 Low | i18n patch surface keeps growing | v0.3.4 patched `game.i18n.localize`; v0.4.1 had to also re-register Handlebars `{{localize}}`. Future Foundry releases may surface new bound-original entry points. Re-test on every Foundry minor. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 
@@ -105,8 +103,9 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 - **Foundry hook discipline** — register hooks in `main.js`'s `init`/`ready` blocks.
 - **Stable IDs via flags** — every journal we sync stores `flags.gmhub-vtt.externalId`. Re-syncs key off this; never look up by name.
 - **Bearer token in `world` scope** — settings registered with `scope: "world"`, `config: true`; only the GM sees the input.
-- **Manual sync only.** Per `SCOPE.md`: no auto-push, no background polling, no websockets. (`autoPushOnUpdate` is the explicit user-opt-in escape hatch.)
-- **Foundry content-links** — emit raw `<a class="content-link" data-uuid="<page.uuid>" draggable="true">` markup directly. Foundry recognises this DOM shape on every supported version (pre/post-`enrichHTML` round-trip).
+- **Manual sync only.** Per `SCOPE.md`. (`autoPushOnUpdate` is the explicit opt-in escape hatch.)
+- **Foundry content-links** — emit raw `<a class="content-link" data-uuid="<page.uuid>" draggable="true">` markup directly. Foundry recognises this DOM shape on every supported version.
+- **Bump module.json#version BEFORE tagging mid-release fixes.** Re-tagging the same version doesn't trigger Foundry's update flow (lesson from v0.4.1 → v0.4.2).
 
 ## 7. Useful Commands
 
@@ -115,7 +114,7 @@ See [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the long form.
 git clone https://github.com/b34rblack-glitch/GMhub-VTT.git "$FOUNDRY_DATA/modules/gmhub-vtt"
 
 # Cut a release (manual)
-# 1. Bump module.json#version
+# 1. Bump module.json#version FIRST
 # 2. Tag and push:  git tag v0.X.Y && git push origin v0.X.Y
 # 3. Add release row in docs/EPICS.md
 # 4. release.yml builds module.zip + versioned module.json on tag push
