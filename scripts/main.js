@@ -96,18 +96,15 @@ Hooks.once("init", () => {
   }
 });
 
-// v14 i18n compatibility shim — see CLAUDE.md §4 (v0.3.4) for the trail.
+// v14 i18n compatibility shim — see CLAUDE.md §4 for the trail.
 //
-// v0.4.1 follow-up: also re-register Handlebars `localize` and
-// `localizeFormat` helpers AFTER patching the underlying methods.
-// In v14 Foundry registers those helpers with a bound reference to the
-// original `game.i18n.localize` / `game.i18n.format` captured before our
-// patch runs, so direct JS calls to `game.i18n.localize` go through our
-// flat-cache fallback ("Pull complete" renders) but `{{localize}}` in
-// `.hbs` templates still dispatches to the un-patched original (dialog
-// labels render as raw `GMHUB.Dialog.*` keys). Re-registering the helpers
-// with closures over the live `game.i18n.*` methods routes Handlebars
-// through the patched path on every render.
+// v0.4.3 finally takes (we hope): instead of fighting Foundry's
+// `Handlebars.registerHelper("localize", ...)` re-registration, we
+// mutate `game.i18n.translations` directly so Foundry's private
+// `_loc()` (which `{{localize}}` calls in templates) finds our keys via
+// the standard lookup path. The localize/format JS-level patches stay
+// for direct calls. Per-key `foundry.utils.setProperty` is belt-and-
+// suspenders in case `mergeObject` doesn't take.
 Hooks.once("i18nInit", async () => {
   try {
     const res = await fetch(`modules/${MODULE_ID}/lang/en.json`);
@@ -117,6 +114,36 @@ Hooks.once("i18nInit", async () => {
     }
     const flat = await res.json();
 
+    // ---- Primary path: feed Foundry's translation store ----
+    // Diagnostic finding (v0.4.2): the {{localize}} Handlebars helper
+    // calls Foundry's private _loc() which reads from
+    // game.i18n.translations — NOT from game.i18n.localize. Mutating the
+    // store with the standard expanded shape gets us through every
+    // path that goes through _loc, no helper override required.
+    try {
+      const expanded = foundry.utils.expandObject(flat);
+      foundry.utils.mergeObject(game.i18n.translations, expanded, {
+        inplace: true,
+        overwrite: false
+      });
+    } catch (mergeErr) {
+      console.warn(`[${MODULE_ID}] translations merge failed`, mergeErr);
+    }
+
+    // Belt-and-suspenders: per-key setProperty in case mergeObject
+    // didn't take (e.g. some v14 builds may proxy translations).
+    for (const [key, value] of Object.entries(flat)) {
+      try {
+        foundry.utils.setProperty(game.i18n.translations, key, value);
+      } catch {
+        // ignore — just trying every plausible path
+      }
+    }
+
+    // ---- Secondary path: patch the JS-level localize/format ----
+    // Direct callers (this.sync.client.* error toasts, _setStatus, etc.)
+    // bypass _loc and call game.i18n.localize directly. Patch them too
+    // so a key that's somehow missing from translations still resolves.
     if (!game.i18n.localize?.__gmhubPatched) {
       const origLocalize = game.i18n.localize.bind(game.i18n);
       const patchedLocalize = function (key) {
@@ -141,27 +168,13 @@ Hooks.once("i18nInit", async () => {
       game.i18n.format = patchedFormat;
     }
 
-    // Re-register the Handlebars helpers so `{{localize}}` in templates
-    // dispatches through the patched localize / format on every render.
-    // Foundry's earlier registration captures a bound original; without
-    // this re-register the patch only takes effect for direct JS calls.
-    Handlebars.registerHelper("localize", function (key) {
-      return game.i18n.localize(key);
-    });
-    Handlebars.registerHelper("localizeFormat", function (key, options) {
-      const data = (options && options.hash) ? options.hash : {};
-      return game.i18n.format(key, data);
-    });
-
+    // Force a re-render of any UI that already painted with raw keys.
     if (typeof ui !== "undefined") {
       ui.journal?.render?.(false);
       const settingsApp = Object.values(ui.windows ?? {}).find(
         (w) => w?.constructor?.name === "SettingsConfig"
       );
       settingsApp?.render?.(false);
-      // Also kick any open SyncDialog so its Handlebars-rendered body
-      // picks up the now-correctly-localized labels without a manual
-      // close/reopen.
       for (const win of Object.values(ui.windows ?? {})) {
         if (win?.constructor?.name === "SyncDialog") win.render?.(false);
       }
