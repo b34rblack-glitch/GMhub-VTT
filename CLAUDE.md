@@ -65,12 +65,12 @@ No build step — the module is plain ES modules loaded by Foundry directly.
 
 ## 3. Cross-repo contract (with `gmhub-app`)
 
-This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1` REST endpoints exposed under **Epic E — Public API & Foundry Foundations** in `gmhub-app`.
+This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1` REST endpoints exposed under **Epic E — Public API & Foundry Foundations** in `gmhub-app` (shipped 2026-05-08).
 
 - **`gmhub-app` owns the API surface.** Endpoint shapes, auth model, and token issuance all live there.
 - **This module owns its consumption side and its scope.** What we sync (content types, push/pull semantics, conflict policy) is documented in `SCOPE.md`.
 - **Wire format detail:**
-  - `entity.summary`, `note.body`, `session_plan.gm_notes`, `session_plan.gm_secrets` are Tiptap ProseMirror-JSON — rendered to HTML on pull via `tiptapToHtml` in `sync.js`. Push is currently lossy (sends HTML back, GMV-6).
+  - `entity.summary`, `note.body`, `session_plan.gm_notes`, `session_plan.gm_secrets` are Tiptap ProseMirror-JSON. Pull renders to HTML via `tiptapToHtml` in `sync.js`. **Push sends HTML; `gmhub-app` normalizes HTML → Tiptap-JSON server-side on the `/api/v1` PATCH routes** (jsdom + `@tiptap/html.generateJSON`, shipped 2026-05-09 — closes GMV-6).
   - `session_plan.agenda` is opaque JSON server-side; canonical Scene shape `{ id, title, notes, entities: [{id, name, entityType}], estimated_duration_min, order, ticked }`.
   - **Pinned shape:** `{ entity_id, entity_type, name, staged_at, position, pin_reason? }`. Server-side `pin_reason` shipped in `gmhub-app` 2026-05-09; v0.4.1+ renders it.
   - **Visibility ride-along.** Foundry's per-page eye icon (`page.ownership.default`) reverse-maps to `visibility`: `NONE` → `gm_only`, `OBSERVER` → `campaign`.
@@ -81,13 +81,14 @@ This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1`
 
 > **Update this section at the start of every new release.**
 
-`v0.4.4` closes GMV-9: the PushPreviewDialog now surfaces a per-session breakdown (`<details>` list of session journal names) when more than one session is queued. Drive-by doc-contract catch-up after the v0.4.1→v0.4.3 i18n debugging cycle. Next on deck (recommendation): GMV-6 (Push HTML↔Tiptap), the only outstanding debt that actively breaks documented behaviour — needs cross-repo work to make `gmhub-app`'s entity/note/session-plan write routes accept HTML.
+`v0.4.4` closed GMV-9 (PushPreviewDialog per-session breakdown when more than one session journal is dirty). **GMV-6 (Push HTML ↔ Tiptap round-trip) closed server-side** via `gmhub-app` PR #64 (2026-05-09): the `/api/v1` PATCH routes for entities, notes, and session plans now normalize HTML bodies to Tiptap-JSON via jsdom + `@tiptap/html.generateJSON` before persistence. This module's existing Push path — which sends HTML — round-trips losslessly without a code change here; verified end-to-end with the Senna Blackwater NPC test on 2026-05-09. No active backlog item breaks documented behaviour. Next on deck (recommendation): **GMV-7** (AgendaEditor entity-link UI) or **GMV-5** (ApplicationV2 migration).
+
+No active release branch.
 
 ## 5. Known Issues & Tech Debt
 
 | Priority | Issue | Notes |
 |---|---|---|
-| 🟠 High | Push is lossy on rich-text fields | Pull renders Tiptap JSON → HTML; Push sends HTML back to a JSON-expecting API. Tracked as GMV-6. |
 | 🟡 Med | AgendaEditorDialog can't add/edit per-scene entity links | Existing scenes preserve `entities` on push; the editor has no UI to attach/detach links. Tracked as GMV-7. |
 | 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog + editors are V1; migration deferred to v0.5+. |
 | 🟢 Low | Cross-campaign session journals can leak through Push | Switching campaigns leaves the old campaign's session journals in Foundry until the next Pull's orphan cleanup. |
