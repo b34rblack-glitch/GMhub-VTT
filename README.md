@@ -33,7 +33,7 @@ For the cross-repo contract see [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md).
 
 | | |
 |---|---|
-| Module version | `0.4.0` |
+| Module version | `0.4.1` |
 | Foundry compatibility | v11–v14 (verified v14) |
 | System | dnd5e ≥3.0 |
 | Shipped feature log | [`docs/EPICS.md`](docs/EPICS.md) |
@@ -80,7 +80,7 @@ In Foundry: **Game Settings → Configure Settings → Module Settings → GMhub
 | Campaign       | Bound GMhub campaign for this Foundry world                 |
 | Auto-push      | Optional. When on, every page edit (text, name, eye toggle) is pushed to GMhub immediately. Default off to honour the manual-sync contract. |
 
-**Sync surface:** the **GMhub Sync** button in the Journal sidebar opens the dialog with Pull / Push / Test connection / Pick session / lifecycle controls. Pull populates a `GMhub Sessions` folder with one journal per windowed session; right-click any session journal → **Set as active session** to flip the lifecycle pointer.
+**Sync surface:** the **GMhub Sync** button in the Journal sidebar opens the dialog with Pull / Push / Test connection / Pick session / lifecycle controls. Pull populates a `GMhub Sessions` folder with one journal per windowed session; right-click any session journal → **Set as active session** to flip the lifecycle pointer. The session journal's **Pinned** page renders each pinned entity as a card with a clickable link into Foundry's full entity page.
 
 ## API contract
 
