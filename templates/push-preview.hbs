@@ -74,6 +74,21 @@
         </ul>
       </details>
     {{/if}}
+    {{!-- v0.4.4: per-session breakdown when more than one session journal is
+         dirty. Closes GMV-9. The aggregated sessionPlanLabel above tells the
+         GM *which fields* will be pushed; this list tells them *which
+         sessions* are affected. Hidden when only zero or one session is
+         queued (the SessionPlan row already conveys that case). --}}
+    {{#if sessionPlanJournals.length}}
+      <details>
+        <summary>{{localize "GMHUB.Dialog.PushPreview.SessionPlanJournalsList"}} ({{sessionPlanJournals.length}})</summary>
+        <ul>
+          {{#each sessionPlanJournals}}
+            <li>{{this}}</li>
+          {{/each}}
+        </ul>
+      </details>
+    {{/if}}
   {{/if}}
 
   <footer class="gmhub-dialog-buttons">

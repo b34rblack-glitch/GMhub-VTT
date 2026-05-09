@@ -46,6 +46,7 @@
   "GMHUB.Dialog.PushPreview.NotesUpdate": "Notes to update",
   "GMHUB.Dialog.PushPreview.NotesUpdateList": "Notes that will be updated",
   "GMHUB.Dialog.PushPreview.SessionPlan": "Session plan fields",
+  "GMHUB.Dialog.PushPreview.SessionPlanJournalsList": "Sessions that will be updated",
   "GMHUB.Dialog.PushPreview.QuickNotes": "Quick notes queued",
   "GMHUB.Dialog.AgendaEditor.Title.Agenda": "Edit Agenda",
   "GMHUB.Dialog.AgendaEditor.Title.Pinned": "Edit Pinned",

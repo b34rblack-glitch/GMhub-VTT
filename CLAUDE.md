@@ -25,7 +25,7 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
 | Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt` |
-| Current version | `0.4.2` |
+| Current version | `0.4.4` |
 | Foundry compat | v11 minimum, v14 verified, v14 maximum |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json` |
@@ -50,7 +50,7 @@ Source layout:
 ```
 module.json              # Foundry manifest
 scripts/
-  main.js                # Module entry; hooks init, ready, getJournalDirectoryEntryContext; v14 i18n shim + Handlebars helper re-register
+  main.js                # Module entry; hooks; v14 i18n shim (translations merge + localize/format patch)
   api-client.js          # REST client: ping, list, get, create, update; bearer auth
   sync.js                # Push/pull orchestration; windowed session pull; tiptapToHtml; pinned-card render
   ui.js                  # Sync dialog, session pick, push preview, agenda editor
@@ -72,16 +72,16 @@ This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1`
 - **Wire format detail:**
   - `entity.summary`, `note.body`, `session_plan.gm_notes`, `session_plan.gm_secrets` are Tiptap ProseMirror-JSON — rendered to HTML on pull via `tiptapToHtml` in `sync.js`. Push is currently lossy (sends HTML back, GMV-6).
   - `session_plan.agenda` is opaque JSON server-side; canonical Scene shape `{ id, title, notes, entities: [{id, name, entityType}], estimated_duration_min, order, ticked }`.
-  - **Pinned shape:** `{ entity_id, entity_type, name, staged_at, position, pin_reason? }`. The `pin_reason` field is a cross-repo addition (GMV-10) — v0.4.1+ renders it when present.
+  - **Pinned shape:** `{ entity_id, entity_type, name, staged_at, position, pin_reason? }`. Server-side `pin_reason` shipped in `gmhub-app` 2026-05-09; v0.4.1+ renders it.
   - **Visibility ride-along.** Foundry's per-page eye icon (`page.ownership.default`) reverse-maps to `visibility`: `NONE` → `gm_only`, `OBSERVER` → `campaign`.
-  - **Windowed session pull (v0.4.0).** `listSessions` is filtered client-side to: prep + most-recent ended + running. Orphans are deleted on Pull unless they carry unpushed dirty edits.
+  - **Windowed session pull (v0.4.0).** `listSessions` filtered client-side to: prep + most-recent ended + running. Orphans deleted on Pull unless they carry unpushed dirty edits.
 - Either side changes the contract → the other side's `docs/EPICS.md` gets a follow-up row.
 
 ## 4. Current Focus
 
 > **Update this section at the start of every new release.**
 
-`v0.4.2` is a forced republish of `v0.4.1`. Foundry's update check compares `module.json#version`, not the commit SHA the tag points to — so re-tagging `v0.4.1` after a hotfix didn't trigger Foundry to fetch the new zip. Bumped to `0.4.2` to make the Handlebars-helper re-register fix from late-`v0.4.1` actually reach installed worlds. Lesson learned: **when shipping a fix mid-release, bump the version BEFORE tagging.** v0.4.1's payload — per-pin cards, clickable agenda chips, forward-compatible `pin_reason` rendering, and the Handlebars `{{localize}}` / `{{localizeFormat}}` helper re-register — ships unchanged in v0.4.2.
+`v0.4.4` closes GMV-9: the PushPreviewDialog now surfaces a per-session breakdown (`<details>` list of session journal names) when more than one session is queued. Drive-by doc-contract catch-up after the v0.4.1→v0.4.3 i18n debugging cycle. Next on deck (recommendation): GMV-6 (Push HTML↔Tiptap), the only outstanding debt that actively breaks documented behaviour — needs cross-repo work to make `gmhub-app`'s entity/note/session-plan write routes accept HTML.
 
 ## 5. Known Issues & Tech Debt
 
@@ -92,7 +92,7 @@ This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1`
 | 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog + editors are V1; migration deferred to v0.5+. |
 | 🟢 Low | Cross-campaign session journals can leak through Push | Switching campaigns leaves the old campaign's session journals in Foundry until the next Pull's orphan cleanup. |
 | 🟢 Low | Eye toggle is buffered, not immediate | Per `SCOPE.md` "Manual sync only." Eye click maps to `flags.gmhub-vtt.visibility` and waits for the next Push. |
-| 🟢 Low | i18n patch surface keeps growing | v0.3.4 patched `game.i18n.localize`; v0.4.1 had to also re-register Handlebars `{{localize}}`. Future Foundry releases may surface new bound-original entry points. Re-test on every Foundry minor. |
+| 🟢 Low | i18n shim depends on Foundry's internal `_loc()` reading from `game.i18n.translations` | v0.4.3 mutates `translations` directly; the JS-level localize/format patches handle direct callers. If a future Foundry release moves `_loc()` to a different store, re-test on every Foundry minor. |
 | 🟢 Low | No automated tests | Foundry modules don't have an established test runner. |
 | 🟢 Low | Bearer token stored in world settings (GM-visible) | Acceptable for a single-GM workflow; revisit if the module ever supports multiple GMs sharing one world. |
 
@@ -106,6 +106,7 @@ This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1`
 - **Manual sync only.** Per `SCOPE.md`. (`autoPushOnUpdate` is the explicit opt-in escape hatch.)
 - **Foundry content-links** — emit raw `<a class="content-link" data-uuid="<page.uuid>" draggable="true">` markup directly. Foundry recognises this DOM shape on every supported version.
 - **Bump module.json#version BEFORE tagging mid-release fixes.** Re-tagging the same version doesn't trigger Foundry's update flow (lesson from v0.4.1 → v0.4.2).
+- **i18n surface is layered.** v0.4.3 mutates `game.i18n.translations`; v0.3.4 patches `game.i18n.localize`/`format`. Both stay — they cover different code paths (`_loc()` template helper vs. direct JS calls). Adding new lang keys: just edit `lang/en.json`, the i18nInit hook merges + patches at world load.
 
 ## 7. Useful Commands
 
