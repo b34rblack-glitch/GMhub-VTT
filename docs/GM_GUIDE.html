@@ -1,0 +1,1971 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="GMhub-VTT — the Foundry-side Game Master's Field Manual. A stylized presentation guide for the Foundry VTT companion module: installation, configuration, the Pull/Push flow, the journal layout, running Live at the Foundry table, and pushing it all back to GMhub." />
+<meta name="theme-color" content="#0a0a18" />
+<title>GMhub-VTT · The Game Master's Field Manual (Foundry Edition)</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+/* =======================================================================
+   GMhub-VTT — Game Master's Field Manual (Foundry Edition)
+   Stylized rich-text presentation guide for the Foundry VTT companion
+   module. Self-contained: zero external assets beyond Google Fonts.
+   Print-friendly via @media print at the foot of this stylesheet. Visual
+   language is matched to the sister documents (GMhub-app/docs/PLAYER_GUIDE.html
+   and GM_GUIDE.html) so the three read as one set on the shelf.
+   ======================================================================= */
+
+:root {
+  --bg-0:        #07071a;
+  --bg-1:        #0e1030;
+  --bg-2:        #14163d;
+  --surface-1:   #1a1d4a;
+  --surface-2:   #232763;
+  --surface-3:   #2c3179;
+  --border-1:    rgba(148, 163, 232, 0.16);
+  --border-2:    rgba(148, 163, 232, 0.34);
+  --border-glow: rgba(99, 102, 241, 0.55);
+
+  --indigo:      #6366f1;
+  --indigo-soft: #818cf8;
+  --indigo-deep: #4338ca;
+  --gold:        #f4c869;
+  --gold-deep:   #b08538;
+  --crimson:     #ef476f;
+  --emerald:     #10b981;
+  --amber:       #f59e0b;
+  --rose:        #fb7185;
+  --teal:        #2dd4bf;
+  --violet:      #c084fc;
+
+  --ink:         #f4f4fa;
+  --ink-soft:    #c8cae0;
+  --ink-mute:    #888aa6;
+  --ink-quote:   #b6b8d4;
+
+  --shadow-card: 0 8px 32px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.04) inset;
+  --shadow-glow: 0 0 0 1px var(--border-glow), 0 8px 28px rgba(99,102,241,0.18);
+
+  --display: "Cinzel", "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  --serif:   "Cormorant Garamond", "Iowan Old Style", Georgia, serif;
+  --sans:    "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --mono:    "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse at 8% -10%, rgba(99,102,241,0.20), transparent 55%),
+    radial-gradient(ellipse at 92% 0%, rgba(244,200,105,0.10), transparent 50%),
+    radial-gradient(ellipse at 50% 130%, rgba(67,56,202,0.32), transparent 55%),
+    linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 50%, var(--bg-0) 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,0.014) 0 1px, transparent 1px),
+    radial-gradient(circle at 80% 70%, rgba(255,255,255,0.014) 0 1px, transparent 1px);
+  background-size: 7px 7px, 11px 11px;
+  z-index: 0;
+}
+main { position: relative; z-index: 1; }
+
+h1, h2, h3, h4 {
+  font-family: var(--display);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 0 0 0.6em;
+  line-height: 1.18;
+  color: var(--ink);
+}
+h1 { font-size: clamp(2.4rem, 5vw, 4.2rem); }
+h2 { font-size: clamp(1.7rem, 3vw, 2.3rem); }
+h3 { font-size: clamp(1.2rem, 2vw, 1.45rem); }
+h4 { font-size: 1.05rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+p { margin: 0 0 1em; }
+
+a {
+  color: var(--indigo-soft);
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(129,140,248,0.5);
+  transition: color .15s, border-color .15s;
+}
+a:hover { color: var(--gold); border-color: var(--gold); }
+
+code, kbd, samp { font-family: var(--mono); font-size: 0.86em; }
+:not(pre) > code {
+  padding: 0.10em 0.45em;
+  border-radius: 4px;
+  background: rgba(99,102,241,0.14);
+  color: var(--indigo-soft);
+  border: 1px solid rgba(99,102,241,0.18);
+}
+kbd {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-bottom-width: 2px;
+  color: var(--ink);
+  font-size: 0.78em;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+mark {
+  background: linear-gradient(120deg, transparent 4%, rgba(244,200,105,0.28) 4%, rgba(244,200,105,0.28) 96%, transparent 96%);
+  color: var(--gold);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+blockquote {
+  margin: 1em 0;
+  padding: 0.4em 1.2em;
+  border-left: 3px solid var(--indigo);
+  background: rgba(99,102,241,0.06);
+  border-radius: 0 6px 6px 0;
+  color: var(--ink-quote);
+  font-family: var(--serif);
+  font-size: 1.08em;
+  font-style: italic;
+}
+
+.shell { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
+section.act { padding: 86px 0 18px; position: relative; }
+section.act + section.act { padding-top: 36px; }
+
+.hero { min-height: 100vh; display: grid; align-content: center; padding: 120px 0 100px; position: relative; overflow: hidden; }
+.hero::before, .hero::after { content: ""; position: absolute; pointer-events: none; }
+.hero::before {
+  inset: 0;
+  background:
+    conic-gradient(from 200deg at 50% 50%,
+      rgba(99,102,241,0.10) 0deg,
+      transparent 80deg,
+      rgba(244,200,105,0.08) 160deg,
+      transparent 240deg,
+      rgba(99,102,241,0.10) 360deg);
+  filter: blur(60px);
+}
+.hero::after { left: 50%; top: 12%; width: 1px; height: 76%; background: linear-gradient(180deg, transparent, var(--gold) 50%, transparent); opacity: 0.22; }
+.hero .crest { width: 88px; height: 88px; margin: 0 auto 28px; display: grid; place-items: center; }
+.hero .eyebrow { text-align: center; font-family: var(--display); font-size: 0.92rem; font-weight: 600; letter-spacing: 0.42em; text-transform: uppercase; color: var(--gold); margin-bottom: 18px; }
+.hero h1 {
+  text-align: center;
+  margin: 0 auto 8px;
+  max-width: 16ch;
+  text-wrap: balance;
+  background: linear-gradient(180deg, #ffffff 0%, #c4c8f0 60%, #6366f1 110%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 60px rgba(99,102,241,0.25);
+}
+.hero .subtitle { text-align: center; font-family: var(--serif); font-style: italic; font-size: clamp(1.05rem, 2vw, 1.4rem); color: var(--ink-soft); max-width: 56ch; margin: 8px auto 36px; text-wrap: balance; }
+.hero .meta-row { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin: 24px 0 38px; }
+.hero .pill {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border-1);
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  backdrop-filter: blur(6px);
+}
+.hero .pill .dot { width: 8px; height: 8px; border-radius: 999px; background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
+.hero .pill.brass .dot { background: var(--gold); box-shadow: 0 0 8px var(--gold); }
+.hero .pill.indigo .dot { background: var(--indigo-soft); box-shadow: 0 0 8px var(--indigo-soft); }
+.hero .pill.rose .dot { background: var(--rose); box-shadow: 0 0 8px var(--rose); }
+
+.hero nav.toc-jump { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 820px; margin: 16px auto 0; }
+.hero nav.toc-jump a {
+  font-family: var(--display);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  border: 1px solid var(--border-1);
+  border-radius: 4px;
+  color: var(--ink-soft);
+  background: rgba(20,22,61,0.5);
+  border-bottom: 1px solid var(--border-1);
+}
+.hero nav.toc-jump a:hover { border-color: var(--gold); color: var(--gold); background: rgba(244,200,105,0.06); }
+.hero .scroll-cue { text-align: center; margin-top: 56px; font-family: var(--mono); font-size: 0.78rem; color: var(--ink-mute); letter-spacing: 0.2em; text-transform: uppercase; }
+.hero .scroll-cue::after { content: ""; display: block; width: 1px; height: 38px; margin: 14px auto 0; background: linear-gradient(180deg, var(--gold), transparent); }
+
+.act-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 20px;
+  align-items: end;
+  margin-bottom: 36px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border-1);
+}
+.act-header .numeral {
+  font-family: var(--display);
+  font-size: clamp(2.6rem, 6vw, 4.6rem);
+  font-weight: 800;
+  line-height: 0.85;
+  letter-spacing: 0.04em;
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--gold);
+  text-shadow: 0 0 30px rgba(244,200,105,0.18);
+}
+.act-header .title-block .kicker { font-family: var(--display); font-size: 0.78rem; letter-spacing: 0.32em; color: var(--gold); text-transform: uppercase; margin-bottom: 6px; }
+.act-header h2 { margin: 0; }
+.act-header .lede { margin: 8px 0 0; font-family: var(--serif); font-style: italic; font-size: 1.18rem; color: var(--ink-soft); max-width: 64ch; }
+
+.card {
+  background: linear-gradient(180deg, rgba(35,39,99,0.55), rgba(20,22,61,0.85));
+  border: 1px solid var(--border-1);
+  border-radius: 12px;
+  padding: 22px 24px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+.card.glow { box-shadow: var(--shadow-glow); border-color: var(--border-glow); }
+.card.deco-corner::before, .card.deco-corner::after {
+  content: ""; position: absolute; width: 14px; height: 14px;
+  border: 1.5px solid var(--gold); opacity: 0.6;
+}
+.card.deco-corner::before { top: 8px; left: 8px; border-right: 0; border-bottom: 0; }
+.card.deco-corner::after { bottom: 8px; right: 8px; border-left: 0; border-top: 0; }
+
+.grid { display: grid; gap: 18px; }
+.grid.g-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+.grid.g-3 { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.grid.g-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
+@media (max-width: 880px) { .grid.g-3, .grid.g-4 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+@media (max-width: 600px) { .grid.g-2, .grid.g-3, .grid.g-4 { grid-template-columns: 1fr; } }
+
+.stat-card { text-align: center; padding: 18px 14px; }
+.stat-card .stat-label { font-family: var(--display); font-size: 0.72rem; letter-spacing: 0.24em; color: var(--gold); text-transform: uppercase; }
+.stat-card .stat-value { font-family: var(--mono); font-size: 1.4rem; margin-top: 6px; color: var(--ink); }
+
+.callout {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 14px;
+  padding: 14px 18px;
+  margin: 22px 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-1);
+  border-left-width: 4px;
+  background: rgba(99,102,241,0.08);
+  color: var(--ink-soft);
+}
+.callout strong { color: var(--ink); }
+.callout .glyph {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.callout.info     { border-left-color: var(--indigo);  background: rgba(99,102,241,0.08); }
+.callout.info .glyph    { color: var(--indigo-soft); }
+.callout.tip      { border-left-color: var(--emerald); background: rgba(16,185,129,0.08); }
+.callout.tip .glyph     { color: var(--emerald); }
+.callout.warn     { border-left-color: var(--amber);   background: rgba(245,158,11,0.08); }
+.callout.warn .glyph    { color: var(--amber); }
+.callout.danger   { border-left-color: var(--crimson); background: rgba(239,71,111,0.10); }
+.callout.danger .glyph  { color: var(--crimson); }
+.callout.brass    { border-left-color: var(--gold);    background: rgba(244,200,105,0.08); }
+.callout.brass .glyph   { color: var(--gold); }
+
+.steps { counter-reset: step; padding: 0; list-style: none; margin: 0; }
+.steps > li { counter-increment: step; position: relative; padding: 4px 4px 22px 72px; margin: 0; }
+.steps > li::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0; top: 0;
+  width: 52px; height: 52px;
+  display: grid; place-items: center;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--gold);
+  background:
+    radial-gradient(circle at 30% 30%, rgba(244,200,105,0.18), transparent 60%),
+    var(--surface-1);
+  border: 1.5px solid var(--gold);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(244,200,105,0.05), 0 6px 18px rgba(0,0,0,0.4);
+}
+.steps > li::after {
+  content: ""; position: absolute;
+  left: 26px; top: 56px; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, var(--gold-deep), transparent);
+  opacity: 0.55;
+}
+.steps > li:last-child::after { display: none; }
+.steps > li h3 { margin: 8px 0 6px; color: var(--ink); font-family: var(--display); font-size: 1.18rem; }
+.steps > li p { margin: 0 0 8px; color: var(--ink-soft); }
+
+.tablewrap { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border-1); }
+table { width: 100%; border-collapse: collapse; background: rgba(20,22,61,0.55); font-size: 0.95rem; }
+table th, table td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--border-1); vertical-align: top; }
+table thead th {
+  background: linear-gradient(180deg, rgba(99,102,241,0.20), rgba(99,102,241,0.06));
+  color: var(--gold);
+  font-family: var(--display);
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border-bottom-color: var(--border-2);
+}
+table tbody tr:hover { background: rgba(99,102,241,0.05); }
+table tbody tr:last-child td { border-bottom: 0; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 8px; border-radius: 999px;
+  font-family: var(--mono); font-size: 0.74rem;
+  background: rgba(99,102,241,0.16);
+  border: 1px solid rgba(99,102,241,0.32);
+  color: var(--indigo-soft);
+}
+.chip.brass { background: rgba(244,200,105,0.14); border-color: rgba(244,200,105,0.32); color: var(--gold); }
+.chip.crimson { background: rgba(239,71,111,0.14); border-color: rgba(239,71,111,0.32); color: var(--crimson); }
+.chip.emerald { background: rgba(16,185,129,0.14); border-color: rgba(16,185,129,0.32); color: var(--emerald); }
+.chip.amber { background: rgba(245,158,11,0.14); border-color: rgba(245,158,11,0.32); color: var(--amber); }
+.chip.rose { background: rgba(251,113,133,0.14); border-color: rgba(251,113,133,0.32); color: var(--rose); }
+.chip.violet { background: rgba(192,132,252,0.14); border-color: rgba(192,132,252,0.32); color: var(--violet); }
+.chip.teal { background: rgba(45,212,191,0.14); border-color: rgba(45,212,191,0.32); color: var(--teal); }
+.chip.muted { background: rgba(255,255,255,0.05); border-color: var(--border-1); color: var(--ink-mute); }
+
+.codebox {
+  position: relative; margin: 18px 0;
+  background: #05060f;
+  border: 1px solid var(--border-1);
+  border-radius: 10px; overflow: hidden;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.4);
+}
+.codebox .chrome {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(99,102,241,0.15), rgba(99,102,241,0.04));
+  border-bottom: 1px solid var(--border-1);
+  font-family: var(--mono); font-size: 0.74rem; color: var(--ink-mute);
+}
+.codebox .chrome .lights { display: inline-flex; gap: 5px; }
+.codebox .chrome .lights span { width: 10px; height: 10px; border-radius: 999px; background: rgba(255,255,255,0.18); }
+.codebox .chrome .lights span:nth-child(1) { background: #ff5f56; }
+.codebox .chrome .lights span:nth-child(2) { background: #ffbd2e; }
+.codebox .chrome .lights span:nth-child(3) { background: #27c93f; }
+.codebox .chrome .label { margin-left: 6px; color: var(--ink-soft); font-weight: 500; }
+.codebox pre {
+  margin: 0; padding: 16px 18px;
+  font-family: var(--mono); font-size: 0.86rem; line-height: 1.62;
+  color: #d6d8f3; white-space: pre; overflow-x: auto;
+}
+.codebox pre .c-key { color: #f9c074; }
+.codebox pre .c-str { color: #a3e635; }
+.codebox pre .c-num { color: #67e8f9; }
+.codebox pre .c-com { color: #6b7088; font-style: italic; }
+.codebox pre .c-tag { color: #c084fc; }
+
+.icon { display: inline-block; vertical-align: -2px; width: 1.05em; height: 1.05em; fill: currentColor; }
+.icon-tile {
+  width: 56px; height: 56px;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  background: linear-gradient(180deg, rgba(99,102,241,0.20), rgba(99,102,241,0.04)), var(--surface-1);
+  border: 1px solid var(--border-2);
+  color: var(--indigo-soft);
+  margin-bottom: 12px;
+}
+.icon-tile.brass {
+  color: var(--gold);
+  background: linear-gradient(180deg, rgba(244,200,105,0.20), rgba(244,200,105,0.02)), var(--surface-1);
+  border-color: rgba(244,200,105,0.4);
+}
+.icon-tile svg { width: 28px; height: 28px; fill: currentColor; }
+
+.workflow { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 18px; margin: 24px 0; }
+.workflow .lane {
+  padding: 22px;
+  border-radius: 12px;
+  border: 1px solid var(--border-1);
+  background: linear-gradient(180deg, rgba(35,39,99,0.5), rgba(14,16,48,0.85));
+  display: flex; flex-direction: column;
+}
+.workflow .lane h4 { margin: 0 0 14px; font-family: var(--display); font-size: 0.86rem; letter-spacing: 0.22em; color: var(--gold); text-transform: uppercase; }
+.workflow .lane ul { list-style: none; padding: 0; margin: 0 0 14px; font-size: 0.92rem; color: var(--ink-soft); }
+.workflow .lane ul li { padding: 6px 0 6px 20px; position: relative; border-bottom: 1px dashed var(--border-1); }
+.workflow .lane ul li::before { content: "•"; position: absolute; left: 0; top: 6px; color: var(--indigo-soft); }
+.workflow .arrow { display: grid; grid-template-rows: 1fr auto 1fr auto 1fr; align-items: center; justify-items: center; width: 80px; }
+.workflow .arrow .label-top, .workflow .arrow .label-bot { font-family: var(--display); font-size: 0.72rem; letter-spacing: 0.18em; color: var(--gold); text-transform: uppercase; }
+.workflow .arrow .line { width: 100%; height: 1px; background: linear-gradient(90deg, transparent, var(--gold), transparent); }
+@media (max-width: 720px) { .workflow { grid-template-columns: 1fr; } .workflow .arrow { width: auto; grid-template-columns: 1fr auto 1fr auto 1fr; grid-template-rows: auto; } }
+
+.mockwindow {
+  background: linear-gradient(180deg, #1a1c45, #11132f);
+  border: 1px solid var(--border-2);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+  margin: 20px 0;
+}
+.mockwindow .titlebar {
+  background: linear-gradient(180deg, #2a2e7a, #1a1c45);
+  padding: 9px 14px;
+  font-family: var(--display);
+  font-size: 0.92rem;
+  color: var(--ink);
+  border-bottom: 1px solid var(--border-2);
+  display: flex; align-items: center; gap: 10px;
+}
+.mockwindow .titlebar::before {
+  content: ""; width: 10px; height: 10px;
+  border-radius: 999px;
+  background: var(--emerald);
+  box-shadow: 0 0 8px var(--emerald);
+}
+.mockwindow .body { padding: 16px 18px; font-size: 0.92rem; color: var(--ink-soft); font-family: var(--sans); }
+.mockwindow .field { display: flex; justify-content: space-between; padding: 5px 8px; border-radius: 4px; border-left: 2px solid var(--indigo); background: rgba(99,102,241,0.05); margin-bottom: 6px; }
+.mockwindow .field .lbl { color: var(--ink-mute); font-family: var(--mono); font-size: 0.82em; }
+.mockwindow .field .val { color: var(--ink); font-family: var(--mono); font-size: 0.82em; }
+
+.journal-tree {
+  background: linear-gradient(180deg, #14163d, #0e1030);
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  padding: 10px 8px;
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  color: var(--ink-soft);
+}
+.journal-tree .row {
+  display: grid; grid-template-columns: 16px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+.journal-tree .row:hover { background: rgba(99,102,241,0.08); }
+.journal-tree .row.indent { padding-left: 24px; }
+.journal-tree .row.indent2 { padding-left: 42px; }
+.journal-tree .row .ico { width: 14px; height: 14px; display: inline-grid; place-items: center; color: var(--gold); font-size: 0.78rem; }
+.journal-tree .row .name { color: var(--ink); }
+.journal-tree .row.dim .name { color: var(--ink-mute); }
+.journal-tree .row .badge {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(99,102,241,0.12);
+  border: 1px solid rgba(99,102,241,0.28);
+  color: var(--indigo-soft);
+}
+.journal-tree .row .badge.live { background: rgba(16,185,129,0.18); color: var(--emerald); border-color: rgba(16,185,129,0.4); }
+.journal-tree .row .badge.gm { background: rgba(245,158,11,0.18); color: var(--amber); border-color: rgba(245,158,11,0.4); }
+.journal-tree .row .badge.eye { background: rgba(45,212,191,0.18); color: var(--teal); border-color: rgba(45,212,191,0.4); }
+
+.sync-dialog {
+  background: linear-gradient(180deg, #1a1c45, #11132f);
+  border: 2px solid var(--gold);
+  border-radius: 8px;
+  padding: 20px;
+  margin: 20px 0;
+  box-shadow: 0 0 0 4px rgba(244,200,105,0.06), 0 12px 36px rgba(0,0,0,0.5);
+}
+.sync-dialog h4 {
+  margin: 0 0 8px;
+  font-family: var(--display);
+  font-size: 1.1rem;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--gold);
+}
+.sync-dialog .test-result {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--emerald);
+  margin: 8px 0 14px;
+  padding: 6px 10px;
+  background: rgba(16,185,129,0.08);
+  border-left: 2px solid var(--emerald);
+  border-radius: 0 4px 4px 0;
+}
+.sync-dialog .button-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.sync-dialog button {
+  font-family: var(--display);
+  font-size: 0.82rem;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--gold);
+  background: rgba(244,200,105,0.10);
+  color: var(--gold);
+  cursor: default;
+}
+.sync-dialog button.primary { background: var(--gold); color: #1a1c45; }
+.sync-dialog button.muted { border-color: var(--border-2); color: var(--ink-soft); background: rgba(99,102,241,0.04); }
+
+.command {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--gold);
+  background: rgba(244,200,105,0.05);
+  font-family: var(--mono);
+  font-size: 0.86em;
+  color: var(--gold);
+}
+
+.vis-map {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  margin: 18px 0;
+}
+.vis-map .card-pair {
+  display: grid;
+  grid-template-rows: auto auto;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border-1);
+  background: linear-gradient(180deg, rgba(35,39,99,0.40), rgba(14,16,48,0.85));
+}
+.vis-map .card-pair .gmhub-side {
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  color: var(--gold);
+  border-bottom: 1px dashed var(--gold-deep);
+  background: rgba(244,200,105,0.06);
+}
+.vis-map .card-pair .foundry-side {
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  color: var(--indigo-soft);
+  background: rgba(99,102,241,0.06);
+}
+.vis-map .card-pair .arrow-row {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  color: var(--ink-mute);
+  padding: 4px 0;
+  letter-spacing: 0.18em;
+}
+@media (max-width: 600px) { .vis-map { grid-template-columns: 1fr; } }
+
+.timeline { list-style: none; padding: 0; margin: 14px 0; }
+.timeline > li { position: relative; padding: 8px 0 14px 26px; border-left: 1px dashed var(--border-2); margin-left: 8px; }
+.timeline > li::before {
+  content: "";
+  position: absolute;
+  left: -6px; top: 12px;
+  width: 11px; height: 11px;
+  border-radius: 999px;
+  background: var(--indigo);
+  box-shadow: 0 0 0 3px rgba(99,102,241,0.18);
+}
+.timeline .ver { font-family: var(--mono); color: var(--gold); font-weight: 600; margin-right: 8px; }
+
+.quickref { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; margin: 18px 0; }
+.quickref .qr { padding: 14px 16px; border-radius: 8px; background: linear-gradient(180deg, rgba(35,39,99,0.55), rgba(14,16,48,0.85)); border: 1px solid var(--border-1); }
+.quickref .qr h4 { font-family: var(--display); font-size: 0.84rem; letter-spacing: 0.18em; color: var(--gold); text-transform: uppercase; margin: 0 0 8px; }
+.quickref .qr p { margin: 0; font-size: 0.94rem; color: var(--ink-soft); }
+@media (max-width: 600px) { .quickref { grid-template-columns: 1fr; } }
+
+.kv-row { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; font-size: 0.92rem; margin-top: 6px; }
+.kv-row dt { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-mute); letter-spacing: 0.06em; text-transform: uppercase; }
+.kv-row dd { margin: 0; color: var(--ink); }
+
+.faq { display: grid; gap: 12px; margin: 20px 0; }
+.faq .q {
+  padding: 14px 18px;
+  background: linear-gradient(180deg, rgba(35,39,99,0.55), rgba(14,16,48,0.85));
+  border: 1px solid var(--border-1);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+}
+.faq .q .question {
+  font-family: var(--display);
+  color: var(--gold);
+  font-size: 1.02rem;
+  margin: 0 0 8px;
+}
+.faq .q .answer { color: var(--ink-soft); margin: 0; font-size: 0.94rem; }
+
+footer.book-foot {
+  margin-top: 80px;
+  padding: 60px 0 80px;
+  text-align: center;
+  border-top: 1px solid var(--border-1);
+  background: linear-gradient(180deg, transparent, rgba(99,102,241,0.05));
+}
+footer.book-foot .seal { width: 64px; height: 64px; margin: 0 auto 18px; display: grid; place-items: center; }
+footer.book-foot p { color: var(--ink-mute); font-family: var(--serif); font-style: italic; max-width: 56ch; margin: 0 auto 10px; }
+footer.book-foot .colophon { margin-top: 28px; font-family: var(--mono); font-size: 0.74rem; color: var(--ink-mute); letter-spacing: 0.16em; text-transform: uppercase; }
+
+.dropcap::first-letter {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 3.4em;
+  float: left;
+  line-height: 0.85;
+  padding: 6px 10px 0 0;
+  color: var(--gold);
+  text-shadow: 0 0 18px rgba(244,200,105,0.25);
+}
+
+@media print {
+  :root {
+    --bg-0: #ffffff; --bg-1: #ffffff; --bg-2: #ffffff;
+    --surface-1: #ffffff; --surface-2: #ffffff;
+    --ink: #111; --ink-soft: #333; --ink-mute: #555;
+    --border-1: #ddd; --border-2: #aaa;
+    --indigo: #3b3fbe; --indigo-soft: #4a50d6;
+    --gold: #8a6c1d; --gold-deep: #5a4612;
+  }
+  body { background: #fff; color: #111; }
+  body::before, .hero::before, .hero::after { display: none; }
+  .hero { min-height: auto; padding: 24px 0; page-break-after: always; }
+  section.act { padding: 24px 0; page-break-inside: avoid; }
+  .card, .workflow .lane, .codebox, .mockwindow, .sync-dialog, .journal-tree { background: #fff; border-color: #ccc; box-shadow: none; }
+  .codebox pre { color: #222; }
+  .hero h1 { color: #111; -webkit-text-fill-color: initial; background: none; }
+  a { color: #3b3fbe; border: 0; }
+  table thead th { background: #f4f4ff; color: #111; }
+  .hero nav.toc-jump, .hero .scroll-cue { display: none; }
+}
+</style>
+</head>
+<body>
+
+<main>
+
+<section class="hero shell" id="cover">
+  <div class="crest" aria-hidden="true">
+    <svg viewBox="0 0 120 120" width="88" height="88">
+      <defs>
+        <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#f4c869"/>
+          <stop offset="1" stop-color="#b08538"/>
+        </linearGradient>
+      </defs>
+      <circle cx="60" cy="60" r="56" fill="none" stroke="url(#g1)" stroke-width="1.5" opacity=".6"/>
+      <circle cx="60" cy="60" r="48" fill="none" stroke="#6366f1" stroke-width="1" opacity=".5"/>
+      <path d="M60 18 L92 30 L92 64 C92 84 78 96 60 102 C42 96 28 84 28 64 L28 30 Z"
+            fill="rgba(99,102,241,.18)" stroke="url(#g1)" stroke-width="2"/>
+      <polygon points="60,38 78,50 78,72 60,84 42,72 42,50"
+               fill="none" stroke="#818cf8" stroke-width="1.2"/>
+      <text x="60" y="68" text-anchor="middle"
+            font-family="Cinzel" font-weight="700" font-size="16" fill="#f4c869">VTT</text>
+    </svg>
+  </div>
+
+  <div class="eyebrow">GMhub-VTT · Foundry Module · GM Edition</div>
+  <h1>The Game Master&rsquo;s<br/>Field Manual</h1>
+  <p class="subtitle">
+    The Foundry-side companion to the GMhub web app. Install the bridge,
+    pull your codex into journals, run Live at the table from inside
+    Foundry, and push it all back when the dice are quiet.
+  </p>
+
+  <div class="meta-row">
+    <span class="pill brass"><span class="dot"></span>Foundry VTT v11–v14</span>
+    <span class="pill"><span class="dot"></span>D&amp;D 5e ≥ 3.0</span>
+    <span class="pill indigo"><span class="dot"></span>Module v0.4.4</span>
+    <span class="pill rose"><span class="dot"></span>Companion to the GMhub Web Manual</span>
+  </div>
+
+  <nav class="toc-jump" aria-label="Quick jump to act">
+    <a href="#act-i">I · Welcome</a>
+    <a href="#act-ii">II · Install</a>
+    <a href="#act-iii">III · Configure</a>
+    <a href="#act-iv">IV · First Pull</a>
+    <a href="#act-v">V · Journal layout</a>
+    <a href="#act-vi">VI · Live in Foundry</a>
+    <a href="#act-vii">VII · Reveals</a>
+    <a href="#act-viii">VIII · Quick notes</a>
+    <a href="#act-ix">IX · Push</a>
+    <a href="#act-x">X · Lifecycle</a>
+    <a href="#act-xi">XI · Conflicts</a>
+    <a href="#act-xii">XII · Troubleshooting</a>
+    <a href="#act-xiii">XIII · Quick-reference</a>
+  </nav>
+
+  <div class="scroll-cue">read on</div>
+</section>
+
+<section class="act shell" id="act-i">
+  <div class="act-header">
+    <div class="numeral">I</div>
+    <div class="title-block">
+      <div class="kicker">Act One</div>
+      <h2>Welcome to the bridge</h2>
+      <p class="lede">What this module is, what it deliberately is not,
+        and where it sits between Foundry and the GMhub web app.</p>
+    </div>
+  </div>
+
+  <div class="card deco-corner">
+    <h3 style="font-family:var(--serif); font-style:italic; font-size:1.7rem; color:var(--gold); margin-top:6px;">In one breath</h3>
+    <p class="dropcap" style="font-size:1.06rem;">
+      <strong>GMhub-VTT</strong> is a Foundry VTT module that
+      two-way-syncs <em>journals only</em> &mdash; not scenes, not actors,
+      not combat &mdash; between a Foundry world and one GMhub campaign.
+      Your codex (NPCs, Locations, Factions, Items, Quests, Lore) appears
+      in Foundry as JournalEntries. Your active session&rsquo;s plan does
+      too. You run <strong>Live</strong> inside Foundry; you press
+      <strong>Pull</strong> to load and <strong>Push</strong> to send back.
+      <em>The recap phase still happens in the web app.</em>
+    </p>
+    <p style="font-size:1.02rem;">
+      Sync is <strong>explicit and manual</strong>. There is no live
+      websocket, no background polling, no surprise overwrites. The GM
+      decides the direction; the module follows. <em>One world ↔ one
+      campaign</em>, set once in module settings.
+    </p>
+  </div>
+
+  <div class="callout brass" role="note">
+    <div class="glyph">§</div>
+    <div>
+      <strong>This manual rides on top of the GMhub Web Manual.</strong>
+      Concepts that live on both sides &mdash; the visibility model, the
+      codex shape, the four session phases, what an entity &ldquo;is&rdquo;
+      &mdash; live there. This document references those instead of
+      re-explaining them, so the two read together rather than
+      duplicating each other. Keep that one open if you&rsquo;re new:
+      <a href="https://github.com/b34rblack-glitch/GMhub-app/blob/main/docs/GM_GUIDE.html">GMhub-app/docs/GM_GUIDE.html</a>.
+    </div>
+  </div>
+
+  <h3 style="margin-top:42px;">Workflow position &mdash; the diagram</h3>
+  <div class="codebox">
+    <div class="chrome"><span class="lights"><span></span><span></span><span></span></span><span class="label">workflow.txt</span></div>
+    <pre><span class="c-com">// GMhub stays the canonical archive. Foundry is one optional table-side surface.</span>
+
+GMhub (webapp)                          Foundry VTT (with this module)
+&#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;                       &#9484;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9488;
+&#9474;  PREP        &#9474;                       &#9474;              &#9474;
+&#9474;  - codex     &#9474; &#9472;&#9472; <span class="c-key">Pull</span> &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9654;&#9474;  LIVE        &#9474;
+&#9474;  - notes     &#9474;                       &#9474;  - codex     &#9474;
+&#9474;  - plan      &#9474;                       &#9474;  - notes     &#9474;
+&#9474;              &#9474;                       &#9474;  - plan      &#9474;
+&#9474;              &#9474;                       &#9474;  - reveals   &#9474;
+&#9474;  RECAP       &#9474; &#9664;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472; <span class="c-key">Push</span> &#9472;&#9472;&#9472;&#9474;  - new ents  &#9474;
+&#9474;  - quick-nts &#9474;                       &#9474;  - quick-nts &#9474;
+&#9474;  - reveals   &#9474;                       &#9474;              &#9474;
+&#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;                       &#9492;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9496;
+</pre>
+  </div>
+
+  <h3 style="margin-top:36px;">What this module does &mdash; and stays out of</h3>
+  <div class="grid g-2">
+    <div class="card glow">
+      <h4 style="color:var(--gold);">Inside the wedge</h4>
+      <ul style="color:var(--ink-soft); padding-left: 18px;">
+        <li><strong>Pull</strong> the codex (six entity kinds) + long-form notes + a <em>windowed</em> session slice</li>
+        <li><strong>Push</strong> visibility flips, edits, new entries, quick-notes, plan edits, lifecycle events</li>
+        <li>One <em>JournalEntry per entity_kind</em>: NPCs, Locations, Factions, Items, Quests, Lore (six total)</li>
+        <li>One <em>Notes</em> JournalEntry mirroring GMhub&rsquo;s long-form notes</li>
+        <li>One <em>Session journal per pulled session</em>, under a <code>GMhub Sessions</code> folder</li>
+        <li>Quick-notes via <span class="command">/qn</span> chat command during live sessions</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">Out of scope &mdash; on purpose</h4>
+      <ul style="color:var(--ink-soft); padding-left: 18px;">
+        <li>Maps &rarr; Foundry Scenes (Foundry&rsquo;s scene system is richer)</li>
+        <li>Player characters &rarr; Foundry Actors (D&amp;D 5e Actor is canonical)</li>
+        <li>Live websocket / background sync (manual is the contract)</li>
+        <li>Player Foundry users talking to GMhub (only the GM client authenticates)</li>
+        <li>Combat tracker, dice, tokens, compendiums (all native Foundry)</li>
+        <li>Encounter builder, AI assistant (web-app concerns)</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <div class="glyph">i</div>
+    <div>
+      <strong>Conflict policy: direction wins.</strong> Pull overwrites
+      Foundry; Push overwrites GMhub. The module never merges. The GM
+      picks the direction. The exception is the dirty-skip on Pull (see
+      <a href="#act-xi">Act XI</a>), which protects un-pushed local
+      edits from silent destruction.
+    </div>
+  </div>
+
+  <h3 style="margin-top:42px;">Four anchors before you install</h3>
+  <div class="grid g-4">
+    <div class="card stat-card">
+      <div class="icon-tile brass" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M5 4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h14V4H5zm0 2h12v11H5V6z"/></svg>
+      </div>
+      <div class="stat-label">A Foundry world</div>
+      <div class="stat-value">v11 &ndash; v14</div>
+      <p style="margin-top:6px; font-size:.84rem; color:var(--ink-mute);">D&amp;D 5e system 3.0+</p>
+    </div>
+    <div class="card stat-card">
+      <div class="icon-tile" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 2 4 5v6c0 5 3.5 9.7 8 11 4.5-1.3 8-6 8-11V5l-8-3z"/></svg>
+      </div>
+      <div class="stat-label">A GMhub campaign</div>
+      <div class="stat-value">As GM</div>
+      <p style="margin-top:6px; font-size:.84rem; color:var(--ink-mute);">Already created on gmhub.app</p>
+    </div>
+    <div class="card stat-card">
+      <div class="icon-tile brass" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M14 4a6 6 0 0 0-5.92 7H2v2h2v3h3v-3h1.08A6 6 0 1 0 14 4zm0 9.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+      </div>
+      <div class="stat-label">An API token</div>
+      <div class="stat-value"><code>gmhub_pat_…</code></div>
+      <p style="margin-top:6px; font-size:.84rem; color:var(--ink-mute);">Minted at <code>/account/api-tokens</code></p>
+    </div>
+    <div class="card stat-card">
+      <div class="icon-tile" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M3 5h18v2H3zm0 4h18v2H3zm0 4h18v2H3zm0 4h18v2H3z"/></svg>
+      </div>
+      <div class="stat-label">Three minutes</div>
+      <div class="stat-value">First Pull</div>
+      <p style="margin-top:6px; font-size:.84rem; color:var(--ink-mute);">Install &rarr; configure &rarr; pull</p>
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-ii">
+  <div class="act-header">
+    <div class="numeral">II</div>
+    <div class="title-block">
+      <div class="kicker">Act Two</div>
+      <h2>Installing the module</h2>
+      <p class="lede">One manifest URL pasted into Foundry&rsquo;s module
+        installer. The download is a few hundred kilobytes; the install
+        finishes faster than your tea steeps.</p>
+    </div>
+  </div>
+
+  <ol class="steps">
+    <li>
+      <h3>Open Foundry&rsquo;s Setup screen</h3>
+      <p>From the Foundry launcher, pick <em>Add-on Modules</em> &rarr;
+      <em>Install Module</em>.</p>
+    </li>
+    <li>
+      <h3>Paste the manifest URL</h3>
+      <p>Bottom of the install dialog, in the <em>Manifest URL</em> field:</p>
+      <div class="codebox">
+        <div class="chrome"><span class="lights"><span></span><span></span><span></span></span><span class="label">manifest URL</span></div>
+        <pre>https://github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json</pre>
+      </div>
+      <p>Hit <em>Install</em>. Foundry pulls the latest release tarball
+      and unpacks it under <code>Data/modules/gmhub-vtt</code>.</p>
+    </li>
+    <li>
+      <h3>Enable the module in your world</h3>
+      <p>Launch your world &rarr; <em>Game Settings</em> &rarr; <em>Manage
+      Modules</em> &rarr; tick <strong>GMhub VTT Bridge</strong> &rarr;
+      <em>Save</em>. Foundry restarts the world.</p>
+    </li>
+    <li>
+      <h3>Look for the <em>GMhub Sync</em> button</h3>
+      <p>It appears in the <strong>Journal sidebar</strong>, next to the
+      <em>Create Folder</em> and <em>Create Entry</em> buttons. That&rsquo;s
+      your sync surface for everything the module does.</p>
+    </li>
+  </ol>
+
+  <h3 style="margin-top:36px;">Module manifest at a glance</h3>
+  <div class="codebox">
+    <div class="chrome"><span class="lights"><span></span><span></span><span></span></span><span class="label">module.json</span></div>
+    <pre><span class="c-tag">{</span>
+  <span class="c-key">"id"</span>: <span class="c-str">"gmhub-vtt"</span>,
+  <span class="c-key">"title"</span>: <span class="c-str">"GMhub VTT Bridge"</span>,
+  <span class="c-key">"version"</span>: <span class="c-str">"0.4.4"</span>,
+  <span class="c-key">"compatibility"</span>: <span class="c-tag">{</span> <span class="c-key">"minimum"</span>: <span class="c-str">"11"</span>, <span class="c-key">"verified"</span>: <span class="c-str">"14"</span>, <span class="c-key">"maximum"</span>: <span class="c-str">"14"</span> <span class="c-tag">}</span>,
+  <span class="c-key">"relationships"</span>: <span class="c-tag">{</span>
+    <span class="c-key">"systems"</span>: <span class="c-tag">[{</span> <span class="c-key">"id"</span>: <span class="c-str">"dnd5e"</span>, <span class="c-key">"compatibility"</span>: <span class="c-tag">{</span> <span class="c-key">"minimum"</span>: <span class="c-str">"3.0.0"</span> <span class="c-tag">} }]</span>
+  <span class="c-tag">}</span>
+<span class="c-tag">}</span></pre>
+  </div>
+
+  <div class="callout warn">
+    <div class="glyph">!</div>
+    <div>
+      <strong>Player Foundry clients don&rsquo;t need to install
+      anything.</strong> The module is GM-only by design. Players see the
+      Journal pages you grant them access to, with normal Foundry
+      ownership rules &mdash; nothing about the module&rsquo;s presence
+      changes for them.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-iii">
+  <div class="act-header">
+    <div class="numeral">III</div>
+    <div class="title-block">
+      <div class="kicker">Act Three</div>
+      <h2>Configuration</h2>
+      <p class="lede">Four settings, one of which is sensitive. Set once
+        per world; persists across sessions.</p>
+    </div>
+  </div>
+
+  <p>Open <em>Game Settings &rarr; Configure Settings &rarr; Module
+  Settings &rarr; GMhub VTT</em>. Four fields:</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:24%">Setting</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>GMhub Base URL</strong></td>
+          <td>Root URL of the GMhub deployment. Production: <code>https://gmhub.app</code>. Self-hosted or staging: whatever your URL is. No trailing slash needed.</td>
+        </tr>
+        <tr>
+          <td><strong>GMhub API Key</strong></td>
+          <td>Your personal access token. Sent as <code>Authorization: Bearer gmhub_pat_…</code>. <strong>GM-only</strong> &mdash; never share with player Foundry users. Stored encrypted in world flags.</td>
+        </tr>
+        <tr>
+          <td><strong>Campaign</strong></td>
+          <td>Which GMhub campaign this Foundry world is bound to. After you fill the URL + token, this drop-down lists every campaign you GM. Pick one. <em>One world ↔ one campaign.</em></td>
+        </tr>
+        <tr>
+          <td><strong>Auto-push</strong></td>
+          <td>Off by default. When on, every page edit (text, name, eye toggle) pushes to GMhub immediately. Off honours the manual-sync contract and is the recommended setting.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:36px;">Minting your API token (the GMhub side)</h3>
+  <ol class="steps">
+    <li>
+      <h3>Go to <code>gmhub.app/account/api-tokens</code></h3>
+      <p>The settings page in the web app. Sign in as the GM account
+      that owns the campaign.</p>
+    </li>
+    <li>
+      <h3>Create a new token</h3>
+      <p>Give it a name (&ldquo;Foundry &mdash; my desktop&rdquo;) and
+      pick the scopes the module needs:</p>
+      <div style="margin: 10px 0;">
+        <span class="chip">campaigns:read</span>
+        <span class="chip">entities:read</span>
+        <span class="chip">entities:write</span>
+        <span class="chip">notes:read</span>
+        <span class="chip">notes:write</span>
+        <span class="chip">sessions:read</span>
+        <span class="chip">sessions:write</span>
+        <span class="chip crimson">sessions:secrets</span>
+      </div>
+      <p>The last one is GM-only-forever and unlocks the GM Secrets
+      sub-page on session plans. Grant it if you want Secrets to round-trip;
+      omit if you&rsquo;d rather Secrets stay web-only.</p>
+    </li>
+    <li>
+      <h3>Copy the plaintext &mdash; once</h3>
+      <p>The token shows in plaintext exactly once at issuance. Copy it
+      now or you&rsquo;ll have to revoke and mint another.</p>
+    </li>
+    <li>
+      <h3>Paste it into Foundry&rsquo;s <em>GMhub API Key</em> field</h3>
+      <p>Save settings. The module verifies the token on next Pull /
+      Test connection.</p>
+    </li>
+  </ol>
+
+  <h3 style="margin-top:36px;">The Sync dialog · annotated</h3>
+  <div class="sync-dialog">
+    <h4>GMhub Sync</h4>
+    <div style="font-family:var(--mono); font-size:.78rem; color:var(--ink-soft); margin-bottom:8px;">
+      bound to: <span style="color:var(--gold);">Curse of Strahd</span> &nbsp;·&nbsp;
+      base: <code>https://gmhub.app</code> &nbsp;·&nbsp;
+      token: <code>gmhub_pat_a1b2c3…</code>
+    </div>
+    <div class="test-result">✓ test connection · 200 OK · 47 entities · 12 notes · 3 sessions in window</div>
+    <div class="button-row">
+      <button class="primary">▼ Pull from GMhub</button>
+      <button class="primary">▲ Push to GMhub</button>
+      <button>↻ Test connection</button>
+      <button>Pick session</button>
+      <button class="muted">Lifecycle: ▶ Start &nbsp; ⏸ Pause &nbsp; ▶ Resume &nbsp; ■ End</button>
+    </div>
+  </div>
+
+  <p style="font-size:.92rem; color:var(--ink-mute); text-align:center; margin-top:8px;">
+    Click the <em>GMhub Sync</em> button in the Journal sidebar to open this dialog.
+  </p>
+
+  <div class="callout danger">
+    <div class="glyph">▼</div>
+    <div>
+      <strong>Tokens are GM-only forever.</strong> The token grants the
+      bearer your GM identity for any campaign you GM. If a co-GM needs
+      Foundry sync, they mint <em>their own</em> token under their own
+      account &mdash; never share. Leaked? Revoke at
+      <code>/account/api-tokens</code>; the audit log shows every
+      request the token ever made.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-iv">
+  <div class="act-header">
+    <div class="numeral">IV</div>
+    <div class="title-block">
+      <div class="kicker">Act Four</div>
+      <h2>The first Pull</h2>
+      <p class="lede">Click Pull. Wait twenty seconds. Your codex is in
+        Foundry. Here&rsquo;s what just happened.</p>
+    </div>
+  </div>
+
+  <div class="workflow">
+    <div class="lane">
+      <h4>You click Pull</h4>
+      <ul>
+        <li>Dialog: GMhub Sync &rarr; ▼ Pull from GMhub</li>
+        <li>Module hits the bound campaign&rsquo;s read endpoints</li>
+        <li>Fetches: campaign, entities, notes, the session window</li>
+      </ul>
+      <p style="font-family:var(--serif); font-style:italic; color:var(--ink-mute); margin:0;">"One button."</p>
+    </div>
+    <div class="arrow" aria-hidden="true">
+      <span></span>
+      <span class="label-top">▶ fetch</span>
+      <span class="line"></span>
+      <span class="label-bot">render ◀</span>
+      <span></span>
+    </div>
+    <div class="lane">
+      <h4>Foundry receives</h4>
+      <ul>
+        <li>Six kind-journals appear (NPCs, Locations, etc.)</li>
+        <li>One Notes journal appears</li>
+        <li><code>GMhub Sessions</code> folder with one journal per windowed session</li>
+        <li>Per-page ownership reflects GMhub visibility</li>
+      </ul>
+      <p style="font-family:var(--serif); font-style:italic; color:var(--ink-mute); margin:0;">"Your codex, locally."</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:36px;">What lands in Foundry · the windowed pull</h3>
+  <p>The module pulls a deliberately narrow window of session data, not
+  the full history:</p>
+
+  <div class="grid g-3">
+    <div class="card">
+      <h4 style="color:var(--gold);">All <em>prep</em> sessions</h4>
+      <p>Every session that has no <code>started_at</code>. These are
+      the ones you&rsquo;re still drafting.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">The single most-recent recap</h4>
+      <p>The session with the largest <code>ended_at</code>. The last one
+      you closed the book on.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">The currently running session</h4>
+      <p>If one exists. The active row. Quick-notes you log in Foundry
+      attach here.</p>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <div class="glyph">i</div>
+    <div>
+      <strong>Older recaps stay on the web app.</strong> If you need to
+      reference session-2 from session-7, open it on gmhub.app in a
+      browser tab. <em>Manual fetch of older recaps</em> is tracked as
+      a future v0.5+ feature; for now the window is the contract.
+    </div>
+  </div>
+
+  <h3 style="margin-top:36px;">Visibility ride-along on Pull</h3>
+  <p>Pull respects GMhub&rsquo;s four-value visibility on every entity
+  and note. The module translates each value into a Foundry per-page
+  ownership level:</p>
+
+  <div class="vis-map">
+    <div class="card-pair">
+      <div class="gmhub-side">GMhub: <strong>campaign</strong></div>
+      <div class="arrow-row">▼ maps to</div>
+      <div class="foundry-side">Foundry page ownership: <strong>OBSERVER</strong> for all players</div>
+    </div>
+    <div class="card-pair">
+      <div class="gmhub-side">GMhub: <strong>players_only</strong></div>
+      <div class="arrow-row">▼ maps to</div>
+      <div class="foundry-side">Foundry page ownership: <strong>OBSERVER</strong> for all players</div>
+    </div>
+    <div class="card-pair">
+      <div class="gmhub-side">GMhub: <strong>gm_only</strong></div>
+      <div class="arrow-row">▼ maps to</div>
+      <div class="foundry-side">Foundry page ownership: <strong>NONE</strong> for players (GM only)</div>
+    </div>
+    <div class="card-pair">
+      <div class="gmhub-side">GMhub: <strong>private</strong></div>
+      <div class="arrow-row">▼ maps to</div>
+      <div class="foundry-side">Foundry page ownership: <strong>NONE</strong> for players (GM only)</div>
+    </div>
+  </div>
+
+  <p>Players can never see <em>gm_only</em> or <em>private</em> content
+  through Foundry, regardless of any local ownership tweaks. The mapping
+  is one-way on Pull; on Push the eye-icon state in Foundry maps back
+  (see <a href="#act-vii">Act VII</a>).</p>
+
+  <div class="callout tip">
+    <div class="glyph">✦</div>
+    <div>
+      <strong>The visibility model is the heart of GMhub.</strong> If
+      this is your first time meeting it, the deeper explanation lives
+      in the Web Manual:
+      <a href="https://github.com/b34rblack-glitch/GMhub-app/blob/main/docs/GM_GUIDE.html#act-viii">GM_GUIDE.html § VIII · Visibility</a>.
+      Read that once and the module&rsquo;s mapping will feel natural.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-v">
+  <div class="act-header">
+    <div class="numeral">V</div>
+    <div class="title-block">
+      <div class="kicker">Act Five</div>
+      <h2>The journal layout</h2>
+      <p class="lede">Six kind-journals, one Notes journal, and a folder
+        of session journals. That&rsquo;s the entire surface this module
+        creates inside Foundry.</p>
+    </div>
+  </div>
+
+  <p>After your first Pull, here&rsquo;s what the Journal sidebar looks like:</p>
+
+  <div class="journal-tree" role="presentation" aria-hidden="true">
+    <div class="row"><span class="ico">▾</span><span class="name">📜 NPCs</span><span class="badge">23 pages</span></div>
+    <div class="row indent dim"><span class="ico">·</span><span class="name">Strahd von Zarovich</span><span class="badge gm">gm</span></div>
+    <div class="row indent"><span class="ico">·</span><span class="name">Ireena Kolyana</span><span class="badge eye">obs</span></div>
+    <div class="row indent dim"><span class="ico">·</span><span class="name">Madam Eva</span><span class="badge gm">gm</span></div>
+    <div class="row indent"><span class="ico">·</span><span class="name">Edda the Bartender</span><span class="badge eye">obs</span></div>
+
+    <div class="row"><span class="ico">▾</span><span class="name">📜 Locations</span><span class="badge">14 pages</span></div>
+    <div class="row indent"><span class="ico">·</span><span class="name">Village of Barovia</span><span class="badge eye">obs</span></div>
+    <div class="row indent dim"><span class="ico">·</span><span class="name">Castle Ravenloft &mdash; secret tunnel</span><span class="badge gm">gm</span></div>
+
+    <div class="row"><span class="ico">▸</span><span class="name">📜 Factions</span><span class="badge">6 pages</span></div>
+    <div class="row"><span class="ico">▸</span><span class="name">📜 Items</span><span class="badge">9 pages</span></div>
+    <div class="row"><span class="ico">▸</span><span class="name">📜 Quests</span><span class="badge">4 pages</span></div>
+    <div class="row"><span class="ico">▸</span><span class="name">📜 Lore</span><span class="badge">12 pages</span></div>
+    <div class="row"><span class="ico">▸</span><span class="name">📒 Notes</span><span class="badge">8 pages</span></div>
+
+    <div class="row"><span class="ico">▾</span><span class="name">📁 GMhub Sessions</span><span class="badge">3 entries</span></div>
+    <div class="row indent"><span class="ico">·</span><span class="name">2026-04-15 — Death House</span><span class="badge">recap</span></div>
+    <div class="row indent"><span class="ico">·</span><span class="name">2026-04-22 — The Crypt</span><span class="badge live">live</span></div>
+    <div class="row indent"><span class="ico">·</span><span class="name">2026-04-29 — Vallaki Approach</span><span class="badge">prep</span></div>
+  </div>
+
+  <h3 style="margin-top:36px;">The six kind-journals</h3>
+  <p>Each is a Foundry JournalEntry titled by entity kind. Each
+  <em>page</em> inside is one entity. Page name = entity name; page body
+  = entity summary, rendered from GMhub&rsquo;s ProseMirror-JSON to
+  Foundry-compatible HTML on Pull.</p>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h4 style="color:var(--gold);">External-ID flags</h4>
+      <p>Every journal and page carries a Foundry flag
+      <code>flags.gmhub-vtt.externalId</code> with the entity&rsquo;s
+      GMhub UUID. That flag is how the module knows to <em>update in
+      place</em> on subsequent Pulls instead of creating duplicates.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">New pages = new entities</h4>
+      <p>Add a new page to the <em>NPCs</em> journal in Foundry &mdash;
+      e.g., an NPC you invented mid-session. On Push, the module sees a
+      page with no external-ID flag and creates a new GMhub entity with
+      <code>kind = npc</code> (inferred from the parent journal). GMhub
+      sends back the new UUID; the module writes it into the page&rsquo;s
+      flag for future updates.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">Renaming &amp; re-kinding</h4>
+      <p>Rename a page in Foundry &mdash; the entity name updates on Push.
+      <em>Re-kinding</em> (moving a page from <em>NPCs</em> to
+      <em>Items</em>) is not supported; create a new page in the right
+      journal and delete the misplaced one.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">Deletes</h4>
+      <p>Delete a page in Foundry &mdash; the corresponding GMhub entity
+      is deleted on next Push (idempotent). Delete an entity in GMhub
+      &mdash; the corresponding Foundry page is deleted on next Pull
+      (with the dirty-skip exception &mdash; see <a href="#act-xi">Act XI</a>).</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:36px;">The session journals</h3>
+  <p>Each pulled session lives under the <code>GMhub Sessions</code>
+  folder as one JournalEntry, named <code>YYYY-MM-DD — &lt;title&gt;</code>
+  (date from <code>created_at</code>, so Foundry&rsquo;s alphabetic sort
+  is chronological). Inside, four pages mirror the four web-app sub-pages:</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:24%">Foundry page</th><th>What it carries · who can see it</th></tr></thead>
+      <tbody>
+        <tr><td><strong>GM Notes</strong></td><td>The main canvas. Default ownership: <strong>NONE for players</strong> (GM-only) unless you flip the eye to OBSERVER.</td></tr>
+        <tr><td><strong>Agenda</strong></td><td>Ordered scene list. Same ownership default as GM Notes; flip if you want players to peek at the schedule.</td></tr>
+        <tr><td><strong>GM Secrets</strong> <span class="chip crimson">forever-locked</span></td><td><strong>Always GM-only.</strong> The eye toggle is hidden on this page. Only present if your token has the <code>sessions:secrets</code> scope.</td></tr>
+        <tr><td><strong>Pinned</strong></td><td>One card per pinned entity, with a clickable link into Foundry&rsquo;s full entity page. Per-pin reasons render as a quoted blockquote line under each card.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <div class="glyph">⌬</div>
+    <div>
+      <strong>The active session is a pointer, not a journal.</strong>
+      Multiple session journals can exist simultaneously (the prep set +
+      last recap + running session). The <em>active session</em> is
+      whichever one the lifecycle buttons (Start / Pause / Resume / End)
+      target. Right-click any session journal &rarr; <strong>Set as
+      active session</strong> to flip the pointer; the existing Pick
+      Session dialog stays as a fallback.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-vi">
+  <div class="act-header">
+    <div class="numeral">VI</div>
+    <div class="title-block">
+      <div class="kicker">Act Six</div>
+      <h2>Running Live at the Foundry table</h2>
+      <p class="lede">When the dice are about to hit, you don&rsquo;t open
+        gmhub.app &mdash; you stay in Foundry. Here&rsquo;s the surface.</p>
+    </div>
+  </div>
+
+  <p>For the conceptual model of what a live session <em>is</em>, see
+  the Web Manual&rsquo;s
+  <a href="https://github.com/b34rblack-glitch/GMhub-app/blob/main/docs/GM_GUIDE.html#act-xi">Act XI · Going live</a>.
+  The Foundry surface mirrors that model with a different set of clicks.</p>
+
+  <h3>The pre-flight checklist</h3>
+  <ol class="steps">
+    <li>
+      <h3>Pull the latest</h3>
+      <p>GMhub Sync &rarr; ▼ <strong>Pull from GMhub</strong>. Latest
+      entities, notes, the prep&rsquo;d session you&rsquo;re about to run.</p>
+    </li>
+    <li>
+      <h3>Pick the active session</h3>
+      <p>Two ways: GMhub Sync &rarr; <strong>Pick session</strong>, or
+      right-click the session journal in the sidebar &rarr; <em>Set as
+      active session</em>.</p>
+    </li>
+    <li>
+      <h3>Start the session</h3>
+      <p>GMhub Sync &rarr; <strong>▶ Start</strong>. The module hits
+      <code>POST /sessions/{id}/lifecycle</code> with
+      <code>action: start</code> on GMhub&rsquo;s side; the partial unique
+      index is the source of truth for &ldquo;single active session per
+      campaign&rdquo;.</p>
+    </li>
+    <li>
+      <h3>Open the session journal</h3>
+      <p>The active session journal is your live canvas. Pinned page on
+      the side; GM Notes for the running narrative; quick-notes captured
+      via chat command (next act).</p>
+    </li>
+  </ol>
+
+  <h3 style="margin-top:36px;">The Pinned page · your reference deck</h3>
+  <p>The <em>Pinned</em> page on the active session is one card per
+  pinned entity. Each card has the entity name, a one-line blurb pulled
+  from the GMhub entity summary, an optional <em>pin reason</em> (rendered
+  as a quoted blockquote line), and a link to the full entity&rsquo;s
+  page in the kind-journal.</p>
+
+  <div class="card">
+    <div style="font-family:var(--display); color:var(--gold); font-size:0.78rem; letter-spacing:0.18em; text-transform:uppercase; margin-bottom:8px;">Pinned · Session 5 — The Crypt</div>
+    <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap:14px;">
+      <div style="border:1px solid var(--border-1); border-left: 3px solid var(--rose); border-radius: 6px; padding:12px;">
+        <div style="font-family:var(--display); font-size:1.05rem; color:var(--ink);">Strahd von Zarovich</div>
+        <div style="font-size:.86rem; color:var(--ink-soft); margin: 4px 0;">The lord of Castle Ravenloft. Cursed; cunning; patient.</div>
+        <blockquote style="margin:6px 0 0; font-size:.84rem;">expected to appear in scene 3 &mdash; he watches before he strikes</blockquote>
+        <a href="#" style="font-size:.78rem;">→ Open NPC page</a>
+      </div>
+      <div style="border:1px solid var(--border-1); border-left: 3px solid var(--emerald); border-radius: 6px; padding:12px;">
+        <div style="font-family:var(--display); font-size:1.05rem; color:var(--ink);">Castle Ravenloft &mdash; courtyard</div>
+        <div style="font-size:.86rem; color:var(--ink-soft); margin: 4px 0;">Cobbled, mist-soaked, two stairwells.</div>
+        <blockquote style="margin:6px 0 0; font-size:.84rem;">starting room for tonight&rsquo;s session</blockquote>
+        <a href="#" style="font-size:.78rem;">→ Open Location page</a>
+      </div>
+      <div style="border:1px solid var(--border-1); border-left: 3px solid var(--amber); border-radius: 6px; padding:12px;">
+        <div style="font-family:var(--display); font-size:1.05rem; color:var(--ink);">Sunsword</div>
+        <div style="font-size:.86rem; color:var(--ink-soft); margin: 4px 0;">Silvered hilt; blade flickers when Strahd is near.</div>
+        <a href="#" style="font-size:.78rem;">→ Open Item page</a>
+      </div>
+      <div style="border:1px solid var(--border-1); border-left: 3px solid var(--rose); border-radius: 6px; padding:12px;">
+        <div style="font-family:var(--display); font-size:1.05rem; color:var(--ink);">Ireena Kolyana</div>
+        <div style="font-size:.86rem; color:var(--ink-soft); margin: 4px 0;">Childhood-marked by Strahd; carrying the silver token.</div>
+        <a href="#" style="font-size:.78rem;">→ Open NPC page</a>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin-top:18px;">Add a new pin mid-session by dragging an
+  entity page onto the Pinned page (Foundry-native drag) &mdash; the
+  module catches the drop and creates a session-pin row. On next Push,
+  GMhub gets the new pin.</p>
+
+  <div class="callout info">
+    <div class="glyph">i</div>
+    <div>
+      <strong>Auto-push (off by default) for the eager.</strong> Module
+      Settings &rarr; <em>Auto-push</em> on. Every page edit pushes
+      immediately. Useful at a calm pace; risky over a bad connection.
+      Most GMs leave it off and Push at session-end.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-vii">
+  <div class="act-header">
+    <div class="numeral">VII</div>
+    <div class="title-block">
+      <div class="kicker">Act Seven</div>
+      <h2>Reveals &amp; visibility from inside Foundry</h2>
+      <p class="lede">The eye icon on every Foundry page is your
+        reveal-toggle. Flip it mid-session; on next Push, GMhub gets the
+        same flip.</p>
+    </div>
+  </div>
+
+  <p>Foundry shows a small <em>per-page eye icon</em> in every Journal
+  page&rsquo;s sidebar header. The module hijacks that icon as the
+  visibility toggle. Two states matter:</p>
+
+  <div class="grid g-2">
+    <div class="card">
+      <h4 style="color:var(--gold);">Eye-OFF (closed) <span class="chip amber">gm_only</span></h4>
+      <p>Page ownership for players is <strong>NONE</strong>. They
+      don&rsquo;t see this page in their journal sidebar at all. Maps
+      back to GMhub <code>gm_only</code> on Push.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">Eye-ON (open) <span class="chip emerald">campaign</span></h4>
+      <p>Page ownership for players is <strong>OBSERVER</strong>. They
+      see the page; they can&rsquo;t edit it. Maps back to GMhub
+      <code>campaign</code> on Push (and stamps <code>revealed_at</code>
+      if it wasn&rsquo;t set).</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:36px;">Mid-session reveal · the choreography</h3>
+  <ol class="steps">
+    <li>
+      <h3>The party earns the reveal</h3>
+      <p>They find the secret room, the misdirected NPC drops their
+      cover, the artefact shows its true edge.</p>
+    </li>
+    <li>
+      <h3>You click the eye on the corresponding journal page</h3>
+      <p>Open the entity page in Foundry &rarr; toggle the eye icon to
+      OPEN. Foundry updates the local page&rsquo;s ownership instantly
+      &mdash; players sitting at the table see the page appear in their
+      sidebar within a second.</p>
+    </li>
+    <li>
+      <h3>The change queues for Push</h3>
+      <p>The module marks the page <em>dirty</em>. On next Push, the
+      visibility goes to GMhub: <code>PATCH /entities/{id}/visibility</code>
+      with <code>{ visibility: "campaign" }</code>, plus
+      <code>PATCH /entities/{id}/reveal</code> if first reveal.</p>
+    </li>
+    <li>
+      <h3>Web-app players see it next time they refresh</h3>
+      <p>The new entry appears in their codex with a <em>just revealed</em>
+      chip dated to the moment of the Push. Existing recap mention-chips
+      that referenced this entity light up across every session.</p>
+    </li>
+  </ol>
+
+  <h3 style="margin-top:36px;">The four-value mapping table</h3>
+  <p>Foundry only models two ownership levels per-player (NONE, OBSERVER)
+  for the module&rsquo;s purposes. GMhub has four. Here&rsquo;s the round-trip:</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>GMhub value</th><th>On Pull &rarr; Foundry</th><th>On Push &lt;- Foundry</th></tr></thead>
+      <tbody>
+        <tr><td><code>campaign</code></td><td>OBSERVER for all players</td><td>Eye OPEN on all players &rarr; <code>campaign</code></td></tr>
+        <tr><td><code>players_only</code></td><td>OBSERVER for all players</td><td>Eye OPEN cannot disambiguate from <code>campaign</code> &mdash; we keep the existing GMhub value if it was <code>players_only</code>; otherwise default to <code>campaign</code></td></tr>
+        <tr><td><code>gm_only</code></td><td>NONE for all players</td><td>Eye CLOSED &rarr; <code>gm_only</code></td></tr>
+        <tr><td><code>private</code></td><td>NONE for all players</td><td>Eye CLOSED cannot disambiguate from <code>gm_only</code> &mdash; we keep <code>private</code> if it was already private</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout warn">
+    <div class="glyph">⌬</div>
+    <div>
+      <strong>To set <code>private</code> or <code>players_only</code>,
+      use the web app.</strong> Foundry&rsquo;s ownership model
+      can&rsquo;t express those two values without ambiguity. The module
+      preserves them on round-trip but doesn&rsquo;t let you author them
+      from inside Foundry. They&rsquo;re rare in practice.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-viii">
+  <div class="act-header">
+    <div class="numeral">VIII</div>
+    <div class="title-block">
+      <div class="kicker">Act Eight</div>
+      <h2>Quick notes during play</h2>
+      <p class="lede">The fastest surface for &ldquo;capture this thought
+        before it&rsquo;s gone&rdquo;. One chat command, one line, one
+        Enter.</p>
+    </div>
+  </div>
+
+  <p>While a session is live, the module exposes a <span class="command">/qn</span>
+  chat command. Type <code>/qn</code> followed by anything; the line
+  becomes a quick-note attached to the active GMhub session.</p>
+
+  <div class="codebox">
+    <div class="chrome"><span class="lights"><span></span><span></span><span></span></span><span class="label">Foundry chat · GM</span></div>
+    <pre><span class="c-com">// During session 5, in the Foundry chat box:</span>
+<span class="c-key">/qn</span> Strahd flees up the stairs. Sunsword glows pale silver.
+<span class="c-key">/qn</span> Edda the bartender mentioned the Vistani by name &mdash; remember her smell of woodsmoke
+<span class="c-key">/qn</span> Party assumed the silver token was a key. It isn&rsquo;t. Hold that.</pre>
+  </div>
+
+  <h3 style="margin-top:32px;">Where the notes go</h3>
+  <ol class="steps">
+    <li>
+      <h3>Queued in Foundry first</h3>
+      <p>The module stashes each <code>/qn</code> line in a Foundry world
+      flag. A brief network blip never loses a note; the queue is local.</p>
+    </li>
+    <li>
+      <h3>Pushed to GMhub on next Push</h3>
+      <p>Each queued line goes as a <code>POST /sessions/{id}/quick-notes</code>
+      row, attached to the active session by the active-session pointer.</p>
+    </li>
+    <li>
+      <h3>Lands in the web app&rsquo;s right-hand timeline</h3>
+      <p>Same surface a quick-note dropped via the floating <span class="command">+</span>
+      button on gmhub.app would land in. Indistinguishable in the UI from
+      either origin.</p>
+    </li>
+  </ol>
+
+  <h3 style="margin-top:36px;">The sidebar quick-capture button</h3>
+  <p>If chat-command muscle-memory isn&rsquo;t your style, the module
+  adds a small <em>+ Quick note</em> button to the journal sidebar
+  while a session is live. One field; same backing queue; same
+  destination.</p>
+
+  <div class="callout tip">
+    <div class="glyph">✦</div>
+    <div>
+      <strong>One line per moment.</strong> Quick-notes are not
+      paragraphs; they&rsquo;re bookmarks. The right pattern is a
+      one-line capture every time something noteworthy happens, polished
+      into prose during the post-session recap. Treat <code>/qn</code>
+      like <code>F5</code> in your save game.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-ix">
+  <div class="act-header">
+    <div class="numeral">IX</div>
+    <div class="title-block">
+      <div class="kicker">Act Nine</div>
+      <h2>Push · sending it back</h2>
+      <p class="lede">When the session ends &mdash; or any time you want
+        Foundry&rsquo;s state to land on GMhub &mdash; you click Push. One
+        batched payload; many writes.</p>
+    </div>
+  </div>
+
+  <h3>What gets pushed</h3>
+  <div class="grid g-2">
+    <div class="card">
+      <h4 style="color:var(--gold);">Edits to existing content</h4>
+      <p>Pages with an <code>externalId</code> flag whose content has
+      changed since the last sync. Title renames; body edits; eye-toggle
+      flips.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">New entries</h4>
+      <p>Pages without an <code>externalId</code> flag, in any of the six
+      kind-journals or the Notes journal. Module infers the entity kind
+      from the parent journal. GMhub assigns a UUID; module writes it
+      back into the page&rsquo;s flag for next time.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">Visibility / reveal flips</h4>
+      <p>Eye-toggle changes since last sync, in both directions.
+      First-reveal also stamps <code>revealed_at</code> on the GMhub side.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">Quick notes</h4>
+      <p>The local <code>/qn</code> queue, drained one row per quick-note,
+      attached to the active session.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">Session lifecycle events</h4>
+      <p>Start / Pause / Resume / End actions you triggered from
+      Foundry, targeting the active session. Mirrors the web-app
+      lifecycle.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">Plan edits to <em>any</em> session</h4>
+      <p>Not just the active one. Editing a prep session&rsquo;s
+      Agenda or GM Notes in Foundry pushes back to that session on the
+      next Push.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:36px;">Deletes round-trip too</h3>
+  <p>Delete a page in Foundry &rarr; on Push, the module sends
+  <code>DELETE /entities/{id}</code> (or <code>/notes/{id}</code>). The
+  endpoint is idempotent &mdash; a second delete returns 404 cleanly.
+  GMhub&rsquo;s mention-chip cleanup runs server-side; chips referencing
+  the deleted entity render as plain text.</p>
+
+  <div class="callout danger">
+    <div class="glyph">▼</div>
+    <div>
+      <strong>Push overwrites GMhub.</strong> If a co-GM edited
+      <em>@Strahd</em> on the web app since your last Pull, your Push
+      blows their edit away. The conflict policy is <em>direction
+      wins</em>: Pull or Push, never merge. If you&rsquo;re unsure,
+      Pull first &mdash; the module will warn before destroying your
+      local dirty edits (see <a href="#act-xi">Act XI</a>).
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-x">
+  <div class="act-header">
+    <div class="numeral">X</div>
+    <div class="title-block">
+      <div class="kicker">Act Ten</div>
+      <h2>Session lifecycle from Foundry</h2>
+      <p class="lede">Start, pause, resume, end. The four actions you
+        already know from the web app, with the same database
+        constraints.</p>
+    </div>
+  </div>
+
+  <p>The Sync dialog has lifecycle buttons that target the
+  <em>active session</em> &mdash; whichever session journal you set as
+  active. Each button hits
+  <code>POST /sessions/{id}/lifecycle</code> with the matching action.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th style="width:22%">Action</th><th>Effect on GMhub</th><th>Effect in Foundry</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>▶ Start</strong></td>
+          <td>Stamps <code>started_at</code>. Locks the active-session row (the partial unique index).</td>
+          <td>Active pointer set. Quick-note queue starts capturing. Pinned page is treated as live reference.</td>
+        </tr>
+        <tr>
+          <td><strong>⏸ Pause</strong></td>
+          <td>Halts the live timer; <code>started_at</code> kept; session stays the active row.</td>
+          <td>Quick-notes still capture. UI shows the timer paused.</td>
+        </tr>
+        <tr>
+          <td><strong>▶ Resume</strong></td>
+          <td>Timer ticks again. Same row stays active.</td>
+          <td>UI shows the timer running.</td>
+        </tr>
+        <tr>
+          <td><strong>■ End</strong></td>
+          <td>Stamps <code>ended_at</code>. Releases the active-session lock. Recap phase opens on the web app.</td>
+          <td>The session journal gets a <span class="chip">recap</span> badge. Active pointer is cleared.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin-top:36px;">After End · the windowed window slides</h3>
+  <p>Ending a session matters for the next Pull. The session you just
+  ended becomes the new <em>most-recent recap</em>; the previous most-recent
+  recap falls outside the window and (if not dirty) is removed from
+  Foundry on the next Pull. See <a href="#act-xi">Act XI</a> for the
+  dirty-skip exception.</p>
+
+  <div class="callout danger">
+    <div class="glyph">▼</div>
+    <div>
+      <strong>Single active session per campaign &mdash; enforced at the
+      database.</strong> If you press <em>Start</em> on Session 6 while
+      Session 5 is still running, the GMhub server returns 409
+      <code>single_active_session</code>. The module surfaces this as a
+      clear error toast in Foundry. End or Pause Session 5 first.
+    </div>
+  </div>
+
+  <div class="callout info">
+    <div class="glyph">i</div>
+    <div>
+      <strong>Ending does NOT auto-Push.</strong> Pressing End closes
+      the session row on GMhub but doesn&rsquo;t flush your queue of
+      edits, quick-notes, and reveals. Click <strong>Push</strong>
+      explicitly. This is intentional &mdash; you may want to review
+      what you&rsquo;re sending before it lands on the canonical archive.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-xi">
+  <div class="act-header">
+    <div class="numeral">XI</div>
+    <div class="title-block">
+      <div class="kicker">Act Eleven</div>
+      <h2>Conflicts &amp; dirty edits</h2>
+      <p class="lede">Manual sync trades automation for predictability.
+        The cost is a class of conflicts the module handles by warning,
+        not merging. Here&rsquo;s how to read the warnings.</p>
+    </div>
+  </div>
+
+  <h3>The two flavours of conflict</h3>
+  <div class="grid g-2">
+    <div class="card">
+      <h4 style="color:var(--gold);">A · Web changed under you</h4>
+      <p>You Pulled yesterday. A co-GM edited an entity on gmhub.app
+      this morning. You start writing on the same entity in Foundry,
+      then Push. <strong>Your Push wins. The web edit is gone.</strong>
+      Direction wins; the module doesn&rsquo;t merge.</p>
+    </div>
+    <div class="card">
+      <h4 style="color:var(--gold);">B · You changed locally, now you Pull</h4>
+      <p>You edited an entity in Foundry but haven&rsquo;t Pushed. You
+      hit Pull. <strong>The module would normally overwrite your local
+      work &mdash; but the dirty-skip exception protects you.</strong>
+      The page is skipped with a warning toast; you Push or manually
+      resolve before the next Pull.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:36px;">The dirty-skip rule (v0.4.0+)</h3>
+  <div class="callout brass">
+    <div class="glyph">§</div>
+    <div>
+      <strong>Pull never silently destroys un-pushed local edits.</strong>
+      Pages or session journals that carry dirty local changes are
+      <em>skipped</em> on Pull, with a warning toast that lists each one.
+      The GM&rsquo;s next move is theirs: Push the local edits to keep
+      them, or delete the dirty marker manually if they want the Pull to
+      win.
+    </div>
+  </div>
+
+  <p>The dirty-skip applies to both content (pages in kind-journals,
+  Notes journal) and session journals (where a falling-out-of-window
+  session would otherwise be deleted on Pull).</p>
+
+  <h3 style="margin-top:36px;">Worked example · the sliding window</h3>
+  <ol class="steps">
+    <li>
+      <h3>You ended Session 4 last week</h3>
+      <p>Pull at the end of last week brought Session 4 into the
+      &ldquo;most-recent recap&rdquo; slot.</p>
+    </li>
+    <li>
+      <h3>This week you ran and ended Session 5</h3>
+      <p>Session 5 is now the new most-recent recap. Session 4 is
+      outside the window.</p>
+    </li>
+    <li>
+      <h3>You hit Pull</h3>
+      <p>Module reconciles. Session 5 is updated. Session 4&rsquo;s
+      journal would be deleted &mdash; <em>unless</em> you scribbled a
+      late note on Session 4&rsquo;s GM Notes page that hasn&rsquo;t
+      been Pushed yet.</p>
+    </li>
+    <li>
+      <h3>Toast: &ldquo;1 session journal skipped (dirty)&rdquo;</h3>
+      <p>Session 4&rsquo;s journal sticks around with the dirty-skip
+      warning. <strong>You Push</strong> &mdash; the late note goes to
+      GMhub, the dirty flag clears. Next Pull deletes the journal cleanly.</p>
+    </li>
+  </ol>
+
+  <div class="callout warn">
+    <div class="glyph">!</div>
+    <div>
+      <strong>Tombstoning vs delete on Pull was resolved as <em>delete</em>
+      in v0.4.0-α.</strong> The module deletes orphaned content on Pull
+      (with the dirty-skip exception), not archives. If you want a paper
+      trail, use the GMhub web app &mdash; older recaps remain there
+      forever, even when they fall out of the windowed Pull.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-xii">
+  <div class="act-header">
+    <div class="numeral">XII</div>
+    <div class="title-block">
+      <div class="kicker">Act Twelve</div>
+      <h2>Troubleshooting</h2>
+      <p class="lede">The errors you&rsquo;re likeliest to see, and what
+        each one is trying to tell you.</p>
+    </div>
+  </div>
+
+  <div class="faq">
+    <div class="q">
+      <p class="question">"401 invalid_token" on Test connection</p>
+      <p class="answer">Your API key in module settings doesn&rsquo;t
+      match what GMhub has. Either the token expired (default 90 days,
+      max 1 year), it was revoked, or you copied a partial string.
+      Mint a fresh one at <code>/account/api-tokens</code> and paste
+      again.</p>
+    </div>
+    <div class="q">
+      <p class="question">"403 missing_scope: entities:write"</p>
+      <p class="answer">The token is valid but doesn&rsquo;t carry the
+      scope the operation needs. Most commonly missing
+      <code>entities:write</code> or <code>sessions:write</code>. Mint a
+      replacement with the full set
+      (<code>campaigns:read</code>, <code>entities:read/write</code>,
+      <code>notes:read/write</code>, <code>sessions:read/write</code>,
+      and optionally <code>sessions:secrets</code>).</p>
+    </div>
+    <div class="q">
+      <p class="question">"409 single_active_session" on Start</p>
+      <p class="answer">There&rsquo;s already a live session for this
+      campaign &mdash; either started elsewhere (Foundry on another
+      machine, or directly in the web app), or you started it in this
+      Foundry world but the active pointer drifted. Open the web app
+      and End the stale session, or pick a different active session in
+      the Pick Session dialog.</p>
+    </div>
+    <div class="q">
+      <p class="question">Pull says &ldquo;3 pages skipped (dirty)&rdquo;</p>
+      <p class="answer">You have unpushed local edits on those pages.
+      Push them first to keep them, or open each page and use the
+      Foundry context menu to clear the local dirty marker if you
+      really want the Pull to win. <em>Don&rsquo;t bypass the warning
+      blindly.</em></p>
+    </div>
+    <div class="q">
+      <p class="question">A new page I added in Foundry isn&rsquo;t in GMhub after Push</p>
+      <p class="answer">Two likely culprits: (1) the page is in a journal
+      that isn&rsquo;t a recognised kind-journal &mdash; it must be in
+      one of the six kind-journals or the Notes journal; (2) the
+      <em>Auto-push</em> setting is on but a previous push errored, and
+      the queue stalled. Check the browser console
+      (<kbd>F12</kbd> &rarr; Console) for the error and re-Push.</p>
+    </div>
+    <div class="q">
+      <p class="question">My Foundry world&rsquo;s journal sidebar has duplicate journals named &ldquo;NPCs&rdquo;</p>
+      <p class="answer">You probably ran the first Pull while the world
+      already had a hand-made journal of the same name. The module
+      created its own NPCs journal (with the GMhub flag) alongside it.
+      Move pages from the hand-made one into the module&rsquo;s and
+      delete the duplicate &mdash; the module-flagged journal is the
+      one that round-trips.</p>
+    </div>
+    <div class="q">
+      <p class="question">CORS error in the browser console on Test connection</p>
+      <p class="answer">Should not happen against the production
+      <code>gmhub.app</code> deployment &mdash; Epic E shipped permissive
+      CORS on <code>/api/v1/*</code>. If you&rsquo;re hitting a
+      self-hosted or staging deployment, check that the deployment has
+      <code>applyCorsHeaders</code> in its proxy. Foundry typically calls
+      from <code>http://localhost:30000</code>.</p>
+    </div>
+    <div class="q">
+      <p class="question">429 Rate limited</p>
+      <p class="answer">Per-token sustained limit is 600 requests/minute.
+      The error envelope carries <code>Retry-After</code> with the
+      seconds to wait. The module backs off automatically; if you keep
+      seeing this, your sync size is unusually large or auto-push is
+      hitting an edit storm. Turn auto-push off and rely on manual Push.</p>
+    </div>
+    <div class="q">
+      <p class="question">The active session pointer keeps moving on its own</p>
+      <p class="answer">Almost certainly because the previous session was
+      ended via the web app or via another Foundry world bound to the
+      same campaign. The module reads the active row from GMhub on Pull
+      and updates the pointer accordingly. Set the pointer explicitly
+      with right-click &rarr; <em>Set as active session</em> on the
+      journal you want active.</p>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <div class="glyph">i</div>
+    <div>
+      <strong>The audit log is your friend.</strong>
+      <code>/account/api-tokens</code> on the web app shows every
+      request the token has made, with timestamp, endpoint, and
+      response code. If something feels off, open the audit log and
+      look for the failing request.
+    </div>
+  </div>
+</section>
+
+<section class="act shell" id="act-xiii">
+  <div class="act-header">
+    <div class="numeral">XIII</div>
+    <div class="title-block">
+      <div class="kicker">Act Thirteen</div>
+      <h2>Quick-reference card</h2>
+      <p class="lede">One page, taped to the side of your Foundry monitor.
+        Everything you need to remember at the table.</p>
+    </div>
+  </div>
+
+  <div class="card glow deco-corner">
+    <h3 style="font-family:var(--display); margin-top:6px; color:var(--gold);">The Foundry-side cheat-sheet</h3>
+    <div class="quickref">
+      <div class="qr">
+        <h4>Install the module</h4>
+        <p>Manifest URL: <code>github.com/b34rblack-glitch/GMhub-VTT/releases/latest/download/module.json</code></p>
+      </div>
+      <div class="qr">
+        <h4>Configure</h4>
+        <p>Game Settings &rarr; Configure Settings &rarr; Module Settings &rarr; GMhub VTT.</p>
+      </div>
+      <div class="qr">
+        <h4>Open the Sync dialog</h4>
+        <p>Journal sidebar &rarr; <strong>GMhub Sync</strong> button.</p>
+      </div>
+      <div class="qr">
+        <h4>Pull from GMhub</h4>
+        <p>Sync dialog &rarr; <strong>▼ Pull</strong>. Loads codex, notes, the session window.</p>
+      </div>
+      <div class="qr">
+        <h4>Push to GMhub</h4>
+        <p>Sync dialog &rarr; <strong>▲ Push</strong>. Sends every dirty edit + queued quick-notes.</p>
+      </div>
+      <div class="qr">
+        <h4>Pick the active session</h4>
+        <p>Right-click a session journal &rarr; <em>Set as active session</em>, or use the Pick Session dialog.</p>
+      </div>
+      <div class="qr">
+        <h4>Start the session</h4>
+        <p>Sync dialog &rarr; lifecycle <strong>▶ Start</strong>.</p>
+      </div>
+      <div class="qr">
+        <h4>Drop a quick-note</h4>
+        <p>Type <span class="command">/qn</span> followed by the note in the Foundry chat box.</p>
+      </div>
+      <div class="qr">
+        <h4>Reveal a page mid-session</h4>
+        <p>Open the page &rarr; click the per-page <em>eye</em> icon &rarr; OPEN.</p>
+      </div>
+      <div class="qr">
+        <h4>End the session</h4>
+        <p>Sync dialog &rarr; lifecycle <strong>■ End</strong>. Then click Push.</p>
+      </div>
+      <div class="qr">
+        <h4>Mint a fresh API token</h4>
+        <p>gmhub.app &rarr; <code>/account/api-tokens</code>. Copy plaintext once.</p>
+      </div>
+      <div class="qr">
+        <h4>Why is a page skipped on Pull?</h4>
+        <p>Local dirty edit. Push first; or clear the dirty marker manually if you want Pull to win.</p>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:42px;">Glossary</h3>
+  <div class="grid g-2">
+    <div class="card">
+      <dl class="kv-row">
+        <dt>Pull</dt><dd>Fetch GMhub state into Foundry. Pull overwrites Foundry (with the dirty-skip exception).</dd>
+        <dt>Push</dt><dd>Send Foundry state to GMhub. Push overwrites GMhub.</dd>
+        <dt>External-ID flag</dt><dd>The Foundry flag <code>flags.gmhub-vtt.externalId</code> that ties a journal page to a GMhub UUID.</dd>
+        <dt>Window</dt><dd>The set of sessions the module pulls: prep + most-recent recap + currently running.</dd>
+      </dl>
+    </div>
+    <div class="card">
+      <dl class="kv-row">
+        <dt>Active session</dt><dd>The pointer the lifecycle buttons target. Independent of which session journals exist.</dd>
+        <dt>Dirty</dt><dd>A local edit that hasn&rsquo;t been Pushed yet. Skipped on Pull to prevent loss.</dd>
+        <dt>Auto-push</dt><dd>Optional setting that pushes every page edit immediately. Off by default.</dd>
+        <dt>Token scopes</dt><dd>The eight permission flags on an API token. <code>sessions:secrets</code> is the GM-only-forever one.</dd>
+      </dl>
+    </div>
+  </div>
+
+  <h3 style="margin-top:42px;">Companion documents</h3>
+  <ul class="timeline">
+    <li><span class="ver">This manual</span>The Foundry GM Manual &mdash; you are here.</li>
+    <li><span class="ver">Web GM Manual</span>The GMhub Web App Game Master&rsquo;s Field Manual &mdash; <a href="https://github.com/b34rblack-glitch/GMhub-app/blob/main/docs/GM_GUIDE.html">GMhub-app/docs/GM_GUIDE.html</a>. Read this for the conceptual model: visibility, codex shape, session phases.</li>
+    <li><span class="ver">Player Manual</span>The Player&rsquo;s Field Manual &mdash; <a href="https://github.com/b34rblack-glitch/GMhub-app/blob/main/docs/PLAYER_GUIDE.html">GMhub-app/docs/PLAYER_GUIDE.html</a>. Hand it to your players.</li>
+    <li><span class="ver">SCOPE</span>Module scope, behaviour contracts, conflict policy &mdash; <a href="../SCOPE.md">SCOPE.md</a>.</li>
+    <li><span class="ver">SISTER_REPO</span>Cross-repo contract with GMhub-app &mdash; <a href="./SISTER_REPO.md">docs/SISTER_REPO.md</a>.</li>
+    <li><span class="ver">EPICS</span>Append-only release log &mdash; <a href="./EPICS.md">docs/EPICS.md</a>.</li>
+  </ul>
+
+  <h3 style="margin-top:42px;">Cross-references on the GMhub side</h3>
+  <ul class="timeline">
+    <li><span class="ver">/api/v1</span>The Public API surface this module talks to &mdash; live spec at <a href="https://gmhub.app/docs">gmhub.app/docs</a>.</li>
+    <li><span class="ver">PUBLIC_API.md</span>Developer quickstart &mdash; <a href="https://github.com/b34rblack-glitch/GMhub-app/blob/main/docs/PUBLIC_API.md">GMhub-app/docs/PUBLIC_API.md</a>.</li>
+    <li><span class="ver">SISTER_REPO</span>Web-app side of the cross-repo contract &mdash; <a href="https://github.com/b34rblack-glitch/GMhub-app/blob/main/docs/SISTER_REPO.md">GMhub-app/docs/SISTER_REPO.md</a>.</li>
+  </ul>
+</section>
+
+<footer class="book-foot">
+  <div class="seal" aria-hidden="true">
+    <svg viewBox="0 0 64 64" width="64" height="64">
+      <circle cx="32" cy="32" r="30" fill="none" stroke="#f4c869" stroke-width="1.5" opacity=".7"/>
+      <circle cx="32" cy="32" r="22" fill="none" stroke="#6366f1" stroke-width="1" opacity=".7"/>
+      <text x="32" y="38" text-anchor="middle"
+            font-family="Cinzel" font-weight="700" font-size="14" fill="#f4c869">VTT</text>
+    </svg>
+  </div>
+  <p>"GMhub is the canonical archive. Foundry is one optional table-side surface. The bridge between them is one button in each direction &mdash; Pull and Push &mdash; and the GM is the one who picks when each happens."</p>
+  <p style="font-family:var(--display); color:var(--gold); letter-spacing:.18em; text-transform:uppercase; font-size:.86rem; margin-top:18px;">— end of the field manual —</p>
+  <div class="colophon">
+    GMhub-VTT · Foundry GM Edition · v1.0 · module v0.4.4<br/>
+    <a href="https://github.com/b34rblack-glitch/GMhub-VTT">github.com/b34rblack-glitch/GMhub-VTT</a> ·
+    <a href="https://github.com/b34rblack-glitch/GMhub-app">github.com/b34rblack-glitch/GMhub-app</a>
+  </div>
+</footer>
+
+</main>
+
+</body>
+</html>
