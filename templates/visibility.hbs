@@ -1,0 +1,69 @@
+<div class="gmhub-visibility">
+  <p>{{localize "GMHUB.Dialog.Visibility.Body"}}</p>
+
+  {{#if loading}}
+    <p><em>{{localize "GMHUB.PickSession.Loading"}}</em></p>
+  {{else if error}}
+    <p class="gmhub-error">{{error}}</p>
+  {{else}}
+    <div class="gmhub-visibility-radios">
+      <label>
+        <input type="radio" name="gmhub-visibility" value="private" data-action="set-visibility" {{#if isPrivate}}checked{{/if}}>
+        {{localize "GMHUB.Dialog.Visibility.Option.Private"}}
+      </label>
+      <label>
+        <input type="radio" name="gmhub-visibility" value="shared" data-action="set-visibility" {{#if isShared}}checked{{/if}}>
+        {{localize "GMHUB.Dialog.Visibility.Option.Shared"}}
+      </label>
+      <label>
+        <input type="radio" name="gmhub-visibility" value="everyone" data-action="set-visibility" {{#if isEveryone}}checked{{/if}}>
+        {{localize "GMHUB.Dialog.Visibility.Option.Everyone"}}
+      </label>
+    </div>
+
+    {{#if isShared}}
+      {{#if empty}}
+        <p><em>{{localize "GMHUB.Dialog.Visibility.Empty"}}</em></p>
+      {{else}}
+        {{#if anyUnmapped}}
+          <p class="gmhub-warn">{{localize "GMHUB.Dialog.Visibility.RequiresMapping"}}</p>
+        {{/if}}
+        <ul class="gmhub-visibility-list">
+          {{#each rows}}
+            <li>
+              <label>
+                <input type="checkbox" data-action="toggle" data-user-id="{{this.user_id}}" {{#if this.checked}}checked{{/if}}>
+                <span class="gmhub-visibility-name">{{this.display_name}}</span>
+                <span class="gmhub-visibility-role">{{this.role}}</span>
+                {{#if this.unmapped}}
+                  <span class="gmhub-visibility-warning" title="{{localize 'GMHUB.Dialog.Visibility.RequiresMapping'}}"><i class="fas fa-exclamation-triangle"></i></span>
+                {{/if}}
+              </label>
+            </li>
+          {{/each}}
+        </ul>
+      {{/if}}
+    {{/if}}
+
+    <footer class="gmhub-visibility-footer">
+      {{#if isShared}}
+        <div class="gmhub-visibility-bulk">
+          <button type="button" data-action="select-all" {{#if pending}}disabled{{/if}}>
+            {{localize "GMHUB.Button.SelectAll"}}
+          </button>
+          <button type="button" data-action="clear-all" {{#if pending}}disabled{{/if}}>
+            {{localize "GMHUB.Button.ClearAll"}}
+          </button>
+        </div>
+      {{/if}}
+      <div class="gmhub-visibility-actions">
+        <button type="button" data-action="cancel" {{#if pending}}disabled{{/if}}>
+          {{localize "GMHUB.Button.Cancel"}}
+        </button>
+        <button type="button" data-action="save" {{#if pending}}disabled{{/if}}>
+          <i class="fas fa-save"></i> {{localize "GMHUB.Button.Save"}}
+        </button>
+      </div>
+    </footer>
+  {{/if}}
+</div>

@@ -1,13 +1,9 @@
-// GMhub VTT Bridge — Pull/Push orchestration (GMHUB-155 / E12).
+// GMhub VTT Bridge — Pull/Push orchestration.
 //
-// Maps GMhub content to Foundry's journal model per GMhub-VTT/SCOPE.md
-// §"Foundry-side representation".
-//
-// 0015 (Selective Handout Reveal) — note pages carry a `revealedTo`
-// allowlist of GMhub user ids. When non-empty, page ownership becomes
-// per-Foundry-user via the GM-managed playerMap world setting (see
-// main.js). When empty, falls through to the legacy visibility-based
-// ownership branches.
+// 0016 (Unified Visibility): the only visibility values in flight are
+// `private`, `shared`, `everyone`. Legacy values (`gm_only`,
+// `players_only`, `campaign`) are still recognised in case a Pull
+// brings back an unmigrated row, but no Push ever writes them.
 
 import { MODULE_ID } from "./main.js";
 
@@ -15,7 +11,7 @@ const FLAG_KIND = "kind";
 const FLAG_EXTERNAL_ID = "externalId";
 const FLAG_VISIBILITY = "visibility";
 const FLAG_REVEALED_AT = "revealedAt";
-const FLAG_REVEALED_TO = "revealedTo";
+const FLAG_RECIPIENTS = "recipients";
 const FLAG_DIRTY = "dirty";
 const FLAG_ENTITY_TYPE = "entityType";
 const FLAG_AGENDA_DATA = "agendaItems";
@@ -32,7 +28,6 @@ const KIND_JOURNAL_NAMES = {
 
 const NOTES_JOURNAL_NAME = "Notes";
 const SESSION_FOLDER_NAME = "GMhub Sessions";
-
 const SESSION_PAGE_GM_NOTES = "GM Notes";
 const SESSION_PAGE_AGENDA = "Agenda";
 const SESSION_PAGE_SECRETS = "GM Secrets";
@@ -50,7 +45,6 @@ function computeSessionWindow(sessions) {
       return tb - ta;
     });
   const lastRecap = ended[0] ?? null;
-
   const byId = new Map();
   for (const s of prep) if (s?.id) byId.set(s.id, s);
   if (running?.id) byId.set(running.id, running);
@@ -94,8 +88,6 @@ function _findEntityPageById(entityId) {
   }
   return null;
 }
-
-// ---- Tiptap ProseMirror-JSON → HTML ------------------------------------
 
 function _escapeHtml(s) {
   return String(s ?? "")
@@ -142,44 +134,33 @@ function _nodeToHtml(node) {
   if (!node || typeof node !== "object") return "";
   const kids = Array.isArray(node.content) ? node.content.map(_nodeToHtml).join("") : "";
   switch (node.type) {
-    case "doc":
-      return kids;
-    case "paragraph":
-      return `<p>${kids || "&nbsp;"}</p>`;
+    case "doc": return kids;
+    case "paragraph": return `<p>${kids || "&nbsp;"}</p>`;
     case "heading": {
       const level = Math.min(6, Math.max(1, Number(node.attrs?.level) || 1));
       return `<h${level}>${kids}</h${level}>`;
     }
-    case "text":
-      return _applyMarks(_escapeHtml(node.text), node.marks);
+    case "text": return _applyMarks(_escapeHtml(node.text), node.marks);
     case "hardBreak":
-    case "hard_break":
-      return "<br>";
+    case "hard_break": return "<br>";
     case "horizontalRule":
-    case "horizontal_rule":
-      return "<hr>";
+    case "horizontal_rule": return "<hr>";
     case "bulletList":
-    case "bullet_list":
-      return `<ul>${kids}</ul>`;
+    case "bullet_list": return `<ul>${kids}</ul>`;
     case "orderedList":
-    case "ordered_list":
-      return `<ol>${kids}</ol>`;
+    case "ordered_list": return `<ol>${kids}</ol>`;
     case "listItem":
-    case "list_item":
-      return `<li>${kids}</li>`;
-    case "blockquote":
-      return `<blockquote>${kids}</blockquote>`;
+    case "list_item": return `<li>${kids}</li>`;
+    case "blockquote": return `<blockquote>${kids}</blockquote>`;
     case "codeBlock":
-    case "code_block":
-      return `<pre><code>${kids}</code></pre>`;
+    case "code_block": return `<pre><code>${kids}</code></pre>`;
     case "mention": {
       const label = _escapeHtml(node.attrs?.label ?? node.attrs?.id ?? "");
       const entityType = _escapeHtml(node.attrs?.entityType ?? "");
       const id = _escapeHtml(node.attrs?.id ?? "");
       return `<span class="gmhub-mention" data-entity-type="${entityType}" data-entity-id="${id}">@${label}</span>`;
     }
-    default:
-      return kids;
+    default: return kids;
   }
 }
 
@@ -221,58 +202,41 @@ function _playerMap() {
 }
 
 /**
- * Compute the Foundry `JournalEntryPage.ownership` map for a page.
- *
- * 0015 (Selective Handout Reveal):
- *   - If `revealedTo` is a non-empty array of GMhub user ids, the page
- *     becomes default-NONE with the GM as OWNER and each mapped
- *     Foundry user as OBSERVER. GMhub user ids that are not in the
- *     playerMap are skipped (and surfaced via the caller's warning).
- *   - Otherwise the legacy visibility branches apply: gm_only / private
- *     hide from non-GMs; campaign / players_only show to everyone.
+ * Compute Foundry's per-page ownership map from the unified GMhub
+ * visibility tuple.
  *
  * @param {object} args
- * @param {string=} args.visibility note_visibility from GMhub
- * @param {string[]=} args.revealedTo GMhub user ids granted access
- * @returns {{ skippedRevealedIds: string[], ownership: Record<string, number> }}
+ * @param {string} args.visibility one of `private` / `shared` / `everyone`
+ *                                 (legacy values are mapped to safe defaults).
+ * @param {string[]} args.recipients GMhub user ids granted access when
+ *                                   visibility is `shared`.
+ * @returns {{ ownership: Record<string, number>, skippedRecipients: string[] }}
  */
-export function computePageOwnership({ visibility, revealedTo } = {}) {
+export function computePageOwnership({ visibility, recipients } = {}) {
   const { NONE, OBSERVER, OWNER } = ownershipLevels();
   const gmId = gmUserId();
-  const skippedRevealedIds = [];
+  const skippedRecipients = [];
 
-  if (Array.isArray(revealedTo) && revealedTo.length > 0) {
+  if (visibility === "shared") {
     const map = _playerMap();
     const ownership = { default: NONE, [gmId]: OWNER };
-    for (const gmhubUserId of revealedTo) {
+    for (const gmhubUserId of recipients ?? []) {
       const foundryUserId = map?.[gmhubUserId];
       if (foundryUserId && game.users?.get?.(foundryUserId)) {
         ownership[foundryUserId] = OBSERVER;
       } else {
-        skippedRevealedIds.push(gmhubUserId);
+        skippedRecipients.push(gmhubUserId);
       }
     }
-    return { ownership, skippedRevealedIds };
+    return { ownership, skippedRecipients };
   }
 
-  switch (visibility) {
-    case "private":
-    case "gm_only":
-      return { ownership: { default: NONE, [gmId]: OWNER }, skippedRevealedIds };
-    case "players_only":
-    case "campaign":
-    default:
-      return { ownership: { default: OBSERVER, [gmId]: OWNER }, skippedRevealedIds };
+  if (visibility === "everyone" || visibility === "campaign" || visibility === "players_only") {
+    return { ownership: { default: OBSERVER, [gmId]: OWNER }, skippedRecipients };
   }
-}
 
-/**
- * @deprecated Kept as a thin wrapper for callers that don't yet thread
- * the `revealedTo` allowlist. New call sites should use
- * `computePageOwnership` directly.
- */
-export function entityVisibilityToOwnership(visibility) {
-  return computePageOwnership({ visibility, revealedTo: [] }).ownership;
+  // `private`, `gm_only`, or anything unknown — hide from non-GMs.
+  return { ownership: { default: NONE, [gmId]: OWNER }, skippedRecipients };
 }
 
 export const SESSION_PLAN_FLAGS = {
@@ -285,13 +249,8 @@ export const SESSION_PLAN_PAGE_NAMES = {
   pinned: SESSION_PAGE_PINNED
 };
 
-export function renderAgendaHtml(agenda) {
-  return agendaHtml(agenda);
-}
-
-export function renderPinnedHtml(pinned) {
-  return pinnedHtml(pinned);
-}
+export function renderAgendaHtml(agenda) { return agendaHtml(agenda); }
+export function renderPinnedHtml(pinned) { return pinnedHtml(pinned); }
 
 function pinnedHtml(pinned) {
   if (!Array.isArray(pinned) || pinned.length === 0) {
@@ -305,7 +264,6 @@ function pinnedHtml(pinned) {
       const reason = typeof pin?.pin_reason === "string" && pin.pin_reason.trim().length > 0
         ? pin.pin_reason.trim()
         : null;
-
       const entityPage = _findEntityPageById(entityId);
       let nameHtml;
       let blurbHtml;
@@ -320,19 +278,8 @@ function pinnedHtml(pinned) {
         nameHtml = `<span class="gmhub-pinned-name">${name}</span>`;
         blurbHtml = `<div class="gmhub-pinned-blurb gmhub-empty-state">Entity not in this Foundry world — Pull to populate.</div>`;
       }
-
-      const reasonHtml = reason
-        ? `<div class="gmhub-pinned-reason">“${_escapeHtml(reason)}”</div>`
-        : "";
-
-      return `<li class="gmhub-pinned-card" data-entity-type="${entityType}" data-entity-id="${_escapeHtml(entityId ?? "")}">
-  <div class="gmhub-pinned-header">
-    <span class="gmhub-pinned-type">${entityType}</span>
-    ${nameHtml}
-  </div>
-  ${blurbHtml}
-  ${reasonHtml}
-</li>`;
+      const reasonHtml = reason ? `<div class="gmhub-pinned-reason">“${_escapeHtml(reason)}”</div>` : "";
+      return `<li class="gmhub-pinned-card" data-entity-type="${entityType}" data-entity-id="${_escapeHtml(entityId ?? "")}">\n  <div class="gmhub-pinned-header">\n    <span class="gmhub-pinned-type">${entityType}</span>\n    ${nameHtml}\n  </div>\n  ${blurbHtml}\n  ${reasonHtml}\n</li>`;
     })
     .join("\n");
   return `<ul class="gmhub-pinned-list">\n${items}\n</ul>`;
@@ -345,9 +292,7 @@ function agendaHtml(agenda) {
   const items = agenda
     .map((scene) => {
       const title = _escapeHtml(scene?.title ?? "(untitled)");
-      const dur = scene?.estimated_duration_min
-        ? ` <em>(${Number(scene.estimated_duration_min)}m)</em>`
-        : "";
+      const dur = scene?.estimated_duration_min ? ` <em>(${Number(scene.estimated_duration_min)}m)</em>` : "";
       const notes = scene?.notes ? `<p>${_escapeHtml(scene.notes)}</p>` : "";
       const entitiesArr = Array.isArray(scene?.entities) ? scene.entities : [];
       const entities = entitiesArr.length
@@ -376,16 +321,12 @@ export class SyncService {
     this.client = client;
   }
 
-  // ---- shared journal helpers ----
-
   async _findOrCreateJournal(name, kind, extraFlags = {}) {
     const existing = game.journal.contents.find(
       (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
     );
     if (existing) {
-      if (existing.name !== name) {
-        await existing.update({ name });
-      }
+      if (existing.name !== name) await existing.update({ name });
       return existing;
     }
     return JournalEntry.create({
@@ -420,32 +361,37 @@ export class SyncService {
   }
 
   _entityPagePayload(entity) {
-    const { ownership } = computePageOwnership({
+    const recipients = Array.isArray(entity?.recipients) ? entity.recipients : [];
+    const { ownership, skippedRecipients } = computePageOwnership({
       visibility: entity.visibility,
-      revealedTo: []
+      recipients
     });
     return {
-      name: entity.name,
-      type: "text",
-      text: { content: tiptapToHtml(entity.summary), format: 1 /* HTML */ },
-      ownership,
-      flags: {
-        [MODULE_ID]: {
-          [FLAG_EXTERNAL_ID]: entity.id,
-          [FLAG_ENTITY_TYPE]: entity.entity_type,
-          [FLAG_VISIBILITY]: entity.visibility,
-          [FLAG_REVEALED_AT]: entity.revealed_at,
-          [FLAG_DIRTY]: false
+      payload: {
+        name: entity.name,
+        type: "text",
+        text: { content: tiptapToHtml(entity.summary), format: 1 },
+        ownership,
+        flags: {
+          [MODULE_ID]: {
+            [FLAG_EXTERNAL_ID]: entity.id,
+            [FLAG_ENTITY_TYPE]: entity.entity_type,
+            [FLAG_VISIBILITY]: entity.visibility,
+            [FLAG_REVEALED_AT]: entity.revealed_at,
+            [FLAG_RECIPIENTS]: recipients,
+            [FLAG_DIRTY]: false
+          }
         }
-      }
+      },
+      skippedRecipients
     };
   }
 
   _notePagePayload(note) {
-    const revealedTo = Array.isArray(note?.revealed_to) ? note.revealed_to : [];
-    const { ownership, skippedRevealedIds } = computePageOwnership({
+    const recipients = Array.isArray(note?.recipients) ? note.recipients : [];
+    const { ownership, skippedRecipients } = computePageOwnership({
       visibility: note.visibility,
-      revealedTo
+      recipients
     });
     return {
       payload: {
@@ -457,12 +403,12 @@ export class SyncService {
           [MODULE_ID]: {
             [FLAG_EXTERNAL_ID]: note.id,
             [FLAG_VISIBILITY]: note.visibility,
-            [FLAG_REVEALED_TO]: revealedTo,
+            [FLAG_RECIPIENTS]: recipients,
             [FLAG_DIRTY]: false
           }
         }
       },
-      skippedRevealedIds
+      skippedRecipients
     };
   }
 
@@ -489,12 +435,7 @@ export class SyncService {
       journal = await JournalEntry.create({
         name: newName,
         folder: folderId,
-        flags: {
-          [MODULE_ID]: {
-            [FLAG_KIND]: "session",
-            [FLAG_EXTERNAL_ID]: sessionId
-          }
-        }
+        flags: { [MODULE_ID]: { [FLAG_KIND]: "session", [FLAG_EXTERNAL_ID]: sessionId } }
       });
     } else {
       const updates = {};
@@ -511,12 +452,7 @@ export class SyncService {
       type: "text",
       text: { content: tiptapToHtml(plan?.gm_notes), format: 1 },
       ownership: gmOnly,
-      flags: {
-        [MODULE_ID]: {
-          [FLAG_EXTERNAL_ID]: `${sessionId}:gm_notes`,
-          [FLAG_DIRTY]: false
-        }
-      }
+      flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${sessionId}:gm_notes`, [FLAG_DIRTY]: false } }
     });
     await this._upsertPage(journal, `${sessionId}:agenda`, {
       name: SESSION_PAGE_AGENDA,
@@ -537,12 +473,7 @@ export class SyncService {
         type: "text",
         text: { content: tiptapToHtml(plan.gm_secrets), format: 1 },
         ownership: gmOnly,
-        flags: {
-          [MODULE_ID]: {
-            [FLAG_EXTERNAL_ID]: `${sessionId}:gm_secrets`,
-            [FLAG_DIRTY]: false
-          }
-        }
+        flags: { [MODULE_ID]: { [FLAG_EXTERNAL_ID]: `${sessionId}:gm_secrets`, [FLAG_DIRTY]: false } }
       });
     }
     await this._upsertPage(journal, `${sessionId}:pinned`, {
@@ -562,8 +493,6 @@ export class SyncService {
     return journal;
   }
 
-  // ---- dirty-detection ----
-
   _findDirtyEntries() {
     return game.journal.contents.filter((entry) => {
       if (entry.getFlag(MODULE_ID, FLAG_DIRTY)) return true;
@@ -571,13 +500,9 @@ export class SyncService {
     });
   }
 
-  // ---- Pull ----
-
   async pullAll({ confirmOverwrite } = {}) {
     const campaignId = game.settings.get(MODULE_ID, "campaignId");
-    if (!campaignId) {
-      return { cancelled: false, error: "no_campaign_bound" };
-    }
+    if (!campaignId) return { cancelled: false, error: "no_campaign_bound" };
 
     const dirty = this._findDirtyEntries();
     if (dirty.length && typeof confirmOverwrite === "function") {
@@ -585,10 +510,8 @@ export class SyncService {
       if (!confirmed) return { cancelled: true };
     }
 
-    const result = {
-      pulled: { entities: 0, notes: 0, sessions: 0 },
-      errors: []
-    };
+    const result = { pulled: { entities: 0, notes: 0, sessions: 0 }, errors: [] };
+    const unmapped = new Set();
 
     for (const [kind, journalName] of Object.entries(KIND_JOURNAL_NAMES)) {
       try {
@@ -597,7 +520,9 @@ export class SyncService {
           (opts) => this.client.listEntities(campaignId, { ...opts, type: kind, limit: 100 }),
           {}
         )) {
-          await this._upsertPage(journal, entity.id, this._entityPagePayload(entity));
+          const { payload, skippedRecipients } = this._entityPagePayload(entity);
+          for (const id of skippedRecipients) unmapped.add(id);
+          await this._upsertPage(journal, entity.id, payload);
           result.pulled.entities += 1;
         }
         await journal.unsetFlag(MODULE_ID, FLAG_DIRTY).catch(() => {});
@@ -606,18 +531,14 @@ export class SyncService {
       }
     }
 
-    // 0015: collect every unmapped GMhub user id surfaced by note pulls
-    // and emit a single warning at the end so the GM can configure the
-    // playerMap setting before relying on selective reveals.
-    const unmappedFromNotes = new Set();
     try {
       const notesJournal = await this._findOrCreateJournal(NOTES_JOURNAL_NAME, "notes");
       for await (const note of this.client.iterateAll(
         (opts) => this.client.listNotes(campaignId, { ...opts, limit: 100 }),
         {}
       )) {
-        const { payload, skippedRevealedIds } = this._notePagePayload(note);
-        for (const id of skippedRevealedIds) unmappedFromNotes.add(id);
+        const { payload, skippedRecipients } = this._notePagePayload(note);
+        for (const id of skippedRecipients) unmapped.add(id);
         await this._upsertPage(notesJournal, note.id, payload);
         result.pulled.notes += 1;
       }
@@ -626,11 +547,11 @@ export class SyncService {
       result.errors.push({ name: NOTES_JOURNAL_NAME, message: err.message ?? String(err) });
     }
 
-    if (unmappedFromNotes.size > 0) {
-      const list = Array.from(unmappedFromNotes).join(", ");
+    if (unmapped.size > 0) {
+      const list = Array.from(unmapped).join(", ");
       ui.notifications?.warn(
-        game.i18n.format("GMHUB.Warn.UnmappedReveals", {
-          count: unmappedFromNotes.size,
+        game.i18n.format("GMHUB.Warn.UnmappedRecipients", {
+          count: unmapped.size,
           ids: list
         })
       );
@@ -641,7 +562,6 @@ export class SyncService {
       const sessionsList = await this.client.listSessions(campaignId);
       const window = computeSessionWindow(sessionsList ?? []);
       const folder = window.length > 0 ? await ensureSessionFolder() : null;
-
       for (const session of window) {
         try {
           const plan = await this.client.getSessionPlan(campaignId, session.id);
@@ -681,17 +601,13 @@ export class SyncService {
     }
     if (skippedDirty.length) {
       ui.notifications?.warn(
-        `[gmhub-vtt] Skipped ${skippedDirty.length} stale session journal(s) with unpushed edits: ${skippedDirty.join(
-          ", "
-        )}. Push or delete manually before next Pull.`
+        `[gmhub-vtt] Skipped ${skippedDirty.length} stale session journal(s) with unpushed edits: ${skippedDirty.join(", ")}. Push or delete manually before next Pull.`
       );
     }
 
     await game.settings.set(MODULE_ID, "lastPullAt", new Date().toISOString());
     return result;
   }
-
-  // ---- Push ----
 
   async _drainQuickNoteQueue(campaignId, sessionId, result) {
     if (!sessionId) return;
@@ -707,10 +623,7 @@ export class SyncService {
         result.pushed.quickNotes += 1;
       } catch (err) {
         remaining.push(item);
-        result.errors.push({
-          name: "quick-note",
-          message: err.message ?? String(err)
-        });
+        result.errors.push({ name: "quick-note", message: err.message ?? String(err) });
       }
     }
     await game.settings.set(MODULE_ID, "pendingPushQueue", remaining);
@@ -718,28 +631,26 @@ export class SyncService {
 
   async _pushEntityPage(campaignId, kind, page, result) {
     const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
-    const visibility = page.getFlag(MODULE_ID, FLAG_VISIBILITY) ?? "campaign";
+    const visibility = page.getFlag(MODULE_ID, FLAG_VISIBILITY) ?? "private";
+    const recipients = page.getFlag(MODULE_ID, FLAG_RECIPIENTS) ?? [];
     const payload = {
       entity_type: kind,
       name: page.name,
       summary: page.text?.content ?? "",
-      visibility
+      visibility,
+      recipients: Array.isArray(recipients) ? recipients : []
     };
     try {
-      let row;
       if (externalId) {
-        row = await this.client.updateEntity(campaignId, externalId, {
+        await this.client.updateEntity(campaignId, externalId, {
           name: payload.name,
           summary: payload.summary,
-          visibility: payload.visibility
+          visibility: payload.visibility,
+          recipients: payload.recipients
         });
       } else {
-        row = await this.client.createEntity(campaignId, payload);
+        const row = await this.client.createEntity(campaignId, payload);
         await page.setFlag(MODULE_ID, FLAG_EXTERNAL_ID, row.id);
-      }
-      const localRevealed = page.getFlag(MODULE_ID, FLAG_REVEALED_AT);
-      if (Boolean(localRevealed) !== Boolean(row.revealed_at)) {
-        await this.client.setEntityReveal(campaignId, row.id, Boolean(localRevealed));
       }
       await page.setFlag(MODULE_ID, FLAG_DIRTY, false);
       result.pushed.entities += 1;
@@ -755,18 +666,19 @@ export class SyncService {
 
   async _pushNotePage(campaignId, page, result) {
     const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
-    const visibility = page.getFlag(MODULE_ID, FLAG_VISIBILITY) ?? "campaign";
+    const visibility = page.getFlag(MODULE_ID, FLAG_VISIBILITY) ?? "private";
+    const recipients = page.getFlag(MODULE_ID, FLAG_RECIPIENTS) ?? [];
     const payload = {
       title: page.name,
       body: page.text?.content ?? "",
-      visibility
+      visibility,
+      recipients: Array.isArray(recipients) ? recipients : []
     };
     try {
-      let row;
       if (externalId) {
-        row = await this.client.updateNote(campaignId, externalId, payload);
+        await this.client.updateNote(campaignId, externalId, payload);
       } else {
-        row = await this.client.createNote(campaignId, payload);
+        const row = await this.client.createNote(campaignId, payload);
         await page.setFlag(MODULE_ID, FLAG_EXTERNAL_ID, row.id);
       }
       await page.setFlag(MODULE_ID, FLAG_DIRTY, false);
@@ -784,7 +696,6 @@ export class SyncService {
   async _pushSessionPlan(campaignId, sessionId, result) {
     const journal = this._findSessionJournal(sessionId);
     if (!journal) return;
-
     const byName = new Map();
     for (const p of journal.pages.contents) byName.set(p.name, p);
 
@@ -805,21 +716,14 @@ export class SyncService {
     if (pinnedPage && pinnedPage.getFlag(MODULE_ID, FLAG_DIRTY)) {
       partial.pinned = pinnedPage.getFlag(MODULE_ID, FLAG_PINNED_DATA) ?? [];
     }
-
     if (Object.keys(partial).length === 0) return;
 
     try {
       await this.client.updateSessionPlan(campaignId, sessionId, partial);
       if (gmNotes) await gmNotes.setFlag(MODULE_ID, FLAG_DIRTY, false);
-      if (secrets && partial.gm_secrets !== undefined) {
-        await secrets.setFlag(MODULE_ID, FLAG_DIRTY, false);
-      }
-      if (agendaPage && partial.agenda !== undefined) {
-        await agendaPage.setFlag(MODULE_ID, FLAG_DIRTY, false);
-      }
-      if (pinnedPage && partial.pinned !== undefined) {
-        await pinnedPage.setFlag(MODULE_ID, FLAG_DIRTY, false);
-      }
+      if (secrets && partial.gm_secrets !== undefined) await secrets.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      if (agendaPage && partial.agenda !== undefined) await agendaPage.setFlag(MODULE_ID, FLAG_DIRTY, false);
+      if (pinnedPage && partial.pinned !== undefined) await pinnedPage.setFlag(MODULE_ID, FLAG_DIRTY, false);
       result.pushed.sessionPlans += 1;
     } catch (err) {
       result.failed += 1;
@@ -834,7 +738,6 @@ export class SyncService {
   previewPush() {
     const campaignId = game.settings.get(MODULE_ID, "campaignId");
     if (!campaignId) return { error: "no_campaign_bound" };
-
     const preview = {
       entities: { create: [], update: [] },
       notes: { create: [], update: [] },
@@ -843,40 +746,27 @@ export class SyncService {
       quickNotes: 0,
       total: 0
     };
-
     for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
-      const journal = game.journal.contents.find(
-        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
-      );
+      const journal = game.journal.contents.find((e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind);
       if (!journal) continue;
       for (const page of journal.pages.contents) {
         if (page.type !== "text") continue;
         const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
         const dirty = page.getFlag(MODULE_ID, FLAG_DIRTY);
-        if (!externalId) {
-          preview.entities.create.push({ name: page.name, kind });
-        } else if (dirty) {
-          preview.entities.update.push({ name: page.name, kind });
-        }
+        if (!externalId) preview.entities.create.push({ name: page.name, kind });
+        else if (dirty) preview.entities.update.push({ name: page.name, kind });
       }
     }
-
-    const notesJournal = game.journal.contents.find(
-      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes"
-    );
+    const notesJournal = game.journal.contents.find((e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes");
     if (notesJournal) {
       for (const page of notesJournal.pages.contents) {
         if (page.type !== "text") continue;
         const externalId = page.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
         const dirty = page.getFlag(MODULE_ID, FLAG_DIRTY);
-        if (!externalId) {
-          preview.notes.create.push({ name: page.name });
-        } else if (dirty) {
-          preview.notes.update.push({ name: page.name });
-        }
+        if (!externalId) preview.notes.create.push({ name: page.name });
+        else if (dirty) preview.notes.update.push({ name: page.name });
       }
     }
-
     for (const journal of this._allSessionJournals()) {
       let anyDirty = false;
       for (const page of journal.pages.contents) {
@@ -889,61 +779,40 @@ export class SyncService {
       }
       if (anyDirty) preview.sessionPlanJournals.push(journal.name);
     }
-
     const queue = game.settings.get(MODULE_ID, "pendingPushQueue") ?? [];
     preview.quickNotes = queue.length;
-
     preview.total =
       preview.entities.create.length + preview.entities.update.length +
       preview.notes.create.length + preview.notes.update.length +
-      preview.sessionPlanJournals.length +
-      preview.quickNotes;
-
+      preview.sessionPlanJournals.length + preview.quickNotes;
     return preview;
   }
 
   async pushAll() {
     const campaignId = game.settings.get(MODULE_ID, "campaignId");
-    if (!campaignId) {
-      return { error: "no_campaign_bound" };
-    }
+    if (!campaignId) return { error: "no_campaign_bound" };
     const activeSessionId = game.settings.get(MODULE_ID, "activeSessionId");
-
     const result = {
       pushed: { entities: 0, notes: 0, sessionPlans: 0, quickNotes: 0 },
       failed: 0,
       errors: []
     };
-
     await this._drainQuickNoteQueue(campaignId, activeSessionId, result);
-
     for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
-      const journal = game.journal.contents.find(
-        (e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind
-      );
+      const journal = game.journal.contents.find((e) => e.getFlag(MODULE_ID, FLAG_KIND) === kind);
       if (!journal) continue;
       for (const page of journal.pages.contents) {
-        if (page.type !== "text") {
-          console.info(`[gmhub-vtt] skipping non-text page "${page.name}" in ${journal.name}`);
-          continue;
-        }
+        if (page.type !== "text") continue;
         await this._pushEntityPage(campaignId, kind, page, result);
       }
     }
-
-    const notesJournal = game.journal.contents.find(
-      (e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes"
-    );
+    const notesJournal = game.journal.contents.find((e) => e.getFlag(MODULE_ID, FLAG_KIND) === "notes");
     if (notesJournal) {
       for (const page of notesJournal.pages.contents) {
-        if (page.type !== "text") {
-          console.info(`[gmhub-vtt] skipping non-text note page "${page.name}"`);
-          continue;
-        }
+        if (page.type !== "text") continue;
         await this._pushNotePage(campaignId, page, result);
       }
     }
-
     for (const journal of this._allSessionJournals()) {
       const sessionId = journal.getFlag(MODULE_ID, FLAG_EXTERNAL_ID);
       if (!sessionId) continue;
@@ -951,7 +820,6 @@ export class SyncService {
       if (!hasDirty) continue;
       await this._pushSessionPlan(campaignId, sessionId, result);
     }
-
     return result;
   }
 
@@ -964,7 +832,6 @@ export class SyncService {
       failed: 0,
       errors: []
     };
-
     if (kind === "notes") {
       for (const page of entry.pages.contents) {
         if (page.type !== "text") continue;
@@ -984,9 +851,7 @@ export class SyncService {
     return result;
   }
 
-  pushJournal(entry) {
-    return this.pushOne(entry);
-  }
+  pushJournal(entry) { return this.pushOne(entry); }
 
   async markDirty(entry) {
     await entry.setFlag(MODULE_ID, FLAG_DIRTY, true);
