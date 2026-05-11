@@ -5,7 +5,13 @@
 
 import { GmhubClient } from "./api-client.js";
 import { SyncService } from "./sync.js";
-import { openAgendaEditorForPage, PickSessionDialog, SyncDialog } from "./ui.js";
+import {
+  openAgendaEditorForPage,
+  openRevealMenuForPage,
+  PickSessionDialog,
+  PlayerMapDialog,
+  SyncDialog
+} from "./ui.js";
 
 export const MODULE_ID = "gmhub-vtt";
 
@@ -82,13 +88,36 @@ Hooks.once("init", () => {
     default: ""
   });
 
+  // 0015 (Selective Handout Reveal): GM-managed mapping from a GMhub
+  // user id to a Foundry user id. Required so the per-note allowlist
+  // sent by gmhub-app can be translated into Foundry's per-user
+  // JournalEntryPage.ownership. Stored as a JSON object keyed by
+  // GMhub user id. Edited via the PlayerMapDialog submenu below.
+  game.settings.register(MODULE_ID, "playerMap", {
+    scope: "world",
+    config: false,
+    type: Object,
+    default: {}
+  });
+
+  game.settings.registerMenu(MODULE_ID, "playerMapMenu", {
+    name: "GMHUB.Settings.PlayerMap.Menu.Name",
+    label: "GMHUB.Settings.PlayerMap.Menu.Label",
+    hint: "GMHUB.Settings.PlayerMap.Menu.Hint",
+    icon: "fas fa-users-cog",
+    type: PlayerMapDialog,
+    restricted: true
+  });
+
   loadTemplates([
     `modules/${MODULE_ID}/templates/sync-dialog.hbs`,
     `modules/${MODULE_ID}/templates/pick-session.hbs`,
     `modules/${MODULE_ID}/templates/confirm-overwrite.hbs`,
     `modules/${MODULE_ID}/templates/lifecycle-confirm.hbs`,
     `modules/${MODULE_ID}/templates/push-preview.hbs`,
-    `modules/${MODULE_ID}/templates/agenda-editor.hbs`
+    `modules/${MODULE_ID}/templates/agenda-editor.hbs`,
+    `modules/${MODULE_ID}/templates/player-map.hbs`,
+    `modules/${MODULE_ID}/templates/reveal-menu.hbs`
   ]);
 
   if (!Handlebars.helpers.eq) {
@@ -115,11 +144,6 @@ Hooks.once("i18nInit", async () => {
     const flat = await res.json();
 
     // ---- Primary path: feed Foundry's translation store ----
-    // Diagnostic finding (v0.4.2): the {{localize}} Handlebars helper
-    // calls Foundry's private _loc() which reads from
-    // game.i18n.translations — NOT from game.i18n.localize. Mutating the
-    // store with the standard expanded shape gets us through every
-    // path that goes through _loc, no helper override required.
     try {
       const expanded = foundry.utils.expandObject(flat);
       foundry.utils.mergeObject(game.i18n.translations, expanded, {
@@ -130,8 +154,6 @@ Hooks.once("i18nInit", async () => {
       console.warn(`[${MODULE_ID}] translations merge failed`, mergeErr);
     }
 
-    // Belt-and-suspenders: per-key setProperty in case mergeObject
-    // didn't take (e.g. some v14 builds may proxy translations).
     for (const [key, value] of Object.entries(flat)) {
       try {
         foundry.utils.setProperty(game.i18n.translations, key, value);
@@ -141,9 +163,6 @@ Hooks.once("i18nInit", async () => {
     }
 
     // ---- Secondary path: patch the JS-level localize/format ----
-    // Direct callers (this.sync.client.* error toasts, _setStatus, etc.)
-    // bypass _loc and call game.i18n.localize directly. Patch them too
-    // so a key that's somehow missing from translations still resolves.
     if (!game.i18n.localize?.__gmhubPatched) {
       const origLocalize = game.i18n.localize.bind(game.i18n);
       const patchedLocalize = function (key) {
@@ -168,7 +187,6 @@ Hooks.once("i18nInit", async () => {
       game.i18n.format = patchedFormat;
     }
 
-    // Force a re-render of any UI that already painted with raw keys.
     if (typeof ui !== "undefined") {
       ui.journal?.render?.(false);
       const settingsApp = Object.values(ui.windows ?? {}).find(
@@ -196,7 +214,9 @@ Hooks.once("ready", () => {
     sync,
     openDialog: () => new SyncDialog(sync).render(true),
     openPickSession: () => new PickSessionDialog(client).render(true),
-    openAgendaEditor: (page) => openAgendaEditorForPage(page)
+    openAgendaEditor: (page) => openAgendaEditorForPage(page),
+    openPlayerMap: () => new PlayerMapDialog().render(true),
+    openRevealMenu: (page) => openRevealMenuForPage(page, client)
   };
 });
 
@@ -311,6 +331,28 @@ Hooks.on("getJournalEntryPageContextOptions", (app, options) => {
       openAgendaEditorForPage(page);
     }
   });
+
+  // 0015 (Selective Handout Reveal): per-page "Reveal to specific
+  // players…" context-menu entry. Only offered for note pages that
+  // have already been synced (i.e. carry a GMhub externalId), since
+  // the reveal API is keyed by note id.
+  options.push({
+    name: "GMHUB.Context.RevealPlayers",
+    icon: '<i class="fas fa-user-shield"></i>',
+    condition: (li) => {
+      const pageId = li?.data?.("page-id") ?? li?.data?.("pageId");
+      const page = app?.object?.pages?.get?.(pageId);
+      if (!page) return false;
+      if (page.parent?.getFlag(MODULE_ID, "kind") !== "notes") return false;
+      return Boolean(page.getFlag(MODULE_ID, "externalId"));
+    },
+    callback: (li) => {
+      const pageId = li?.data?.("page-id") ?? li?.data?.("pageId");
+      const page = app?.object?.pages?.get?.(pageId);
+      const { client } = game.modules.get(MODULE_ID).api;
+      openRevealMenuForPage(page, client);
+    }
+  });
 });
 
 Hooks.on("updateJournalEntryPage", async (page, change, _options, userId) => {
@@ -321,14 +363,22 @@ Hooks.on("updateJournalEntryPage", async (page, change, _options, userId) => {
   if (!parentKind) return;
 
   if (change.ownership && parentKind !== "session") {
-    const NONE = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
-    const newVisibility = page.ownership?.default === NONE ? "gm_only" : "campaign";
-    const currentVisibility = page.getFlag(MODULE_ID, "visibility");
-    if (currentVisibility !== newVisibility) {
-      try {
-        await page.setFlag(MODULE_ID, "visibility", newVisibility);
-      } catch (err) {
-        console.warn("[gmhub-vtt] visibility map failed", err);
+    // 0015: if the page is under a selective-reveal allowlist, the
+    // ownership map is intentionally per-user. Don't collapse it back
+    // into the binary `visibility` flag — that's what RevealMenuDialog
+    // is for.
+    const revealedTo = page.getFlag(MODULE_ID, "revealedTo");
+    const hasReveals = Array.isArray(revealedTo) && revealedTo.length > 0;
+    if (!hasReveals) {
+      const NONE = CONST.DOCUMENT_OWNERSHIP_LEVELS.NONE;
+      const newVisibility = page.ownership?.default === NONE ? "gm_only" : "campaign";
+      const currentVisibility = page.getFlag(MODULE_ID, "visibility");
+      if (currentVisibility !== newVisibility) {
+        try {
+          await page.setFlag(MODULE_ID, "visibility", newVisibility);
+        } catch (err) {
+          console.warn("[gmhub-vtt] visibility map failed", err);
+        }
       }
     }
   }

@@ -1,6 +1,6 @@
 # GMhub-VTT — Project Scope
 
-**Status:** Draft baseline — 2026-05-07 · amended 2026-05-08 (windowed multi-session pull, v0.4.0-α)
+**Status:** Draft baseline — 2026-05-07 · amended 2026-05-08 (windowed multi-session pull, v0.4.0-α) · amended 2026-05-11 (selective handout reveal, v0.4.5)
 **Canonical home:** `b34rblack-glitch/GMhub-VTT/SCOPE.md`
 
 This document captures the agreed intent for the GMhub-VTT Foundry module. Every change to scope (additions, removals, behaviour changes) lands here first. Implementation work, the README, and the GMhub-side public API surface should reference this document.
@@ -65,6 +65,7 @@ GMhub (webapp)                          Foundry VTT
 - `gm_only` and `private` content is never visible to player Foundry users; `gm_secrets` is GM-only forever.
 - The GM can **flip visibility/reveal** on any synced item from inside Foundry during play. The change is applied locally to the Foundry doc immediately, then mirrored to GMhub on the next push (`entities.revealed_at` / `note_visibility` updated server-side for continuity). The per-page eye icon in the Journal sidebar is the canonical surface for this.
 - On pull, any reveals the GM made via the webapp since last sync are picked up.
+- **Selective per-player handout reveal (0015, v0.4.5).** Notes can additionally be revealed to a specific subset of campaign players via the `note_player_reveals` allowlist on GMhub. The module materialises this allowlist into Foundry's native per-user `JournalEntryPage.ownership` map: GM is OWNER, each selected player is OBSERVER, everyone else is NONE. The GM picks recipients in Foundry via the new "Reveal to specific players…" page context-menu entry; the change is sent to GMhub immediately via `PATCH /api/v1/.../notes/{id}/player-reveal` and the local ownership map is refreshed. This **loosens** the prior "no player Foundry users talking to GMhub" rule in a narrow way: per-page ownership must reference Foundry user ids, so the module ships a GM-managed slot mapping (`playerMap` world setting, edited via the new Player Mapping submenu) that translates GMhub user ids to Foundry user ids. **Players themselves still never authenticate with GMhub** — only the GM does.
 
 ### Session lifecycle
 - GM can start/pause/resume/end the live session **from either side**; sync mirrors the change.
@@ -80,7 +81,7 @@ GMhub (webapp)                          Foundry VTT
 | Maps → Foundry Scenes                            | Foundry Scenes are richer than GMhub maps; don't replace them.      |
 | Player characters → Foundry Actors               | Foundry's D&D 5e Actor sheet is canonical; PC data lives there.     |
 | Live/realtime sync, websockets, webhooks         | Manual push/pull is the intended UX; no background traffic.         |
-| Player Foundry users talking to GMhub            | Only the GM client authenticates with GMhub.                        |
+| Player Foundry users authenticating with GMhub   | Still only the GM client authenticates. The 0015 slot mapping translates ids; it does not give players GMhub credentials. |
 | Non-GM-driven syncs                              | All sync is GM-initiated.                                           |
 | Replacing Foundry-native features (combat tracker, dice, tokens, compendiums, scenes) | GMhub doesn't model these; module stays out of their way. |
 | Encounter builder, AI assistant, Stripe          | Not module concerns.                                                |
@@ -91,19 +92,20 @@ GMhub (webapp)                          Foundry VTT
 
 ### Pull
 1. GM clicks **Pull from GMhub** in the Journal sidebar.
-2. Module fetches: campaign metadata, all entities (visibility-filtered to GM's role), all notes, and the **session window** — all sessions in `prep`, the single session with the largest `ended_at`, and the running session if any. See § Content types pulled.
+2. Module fetches: campaign metadata, all entities (visibility-filtered to GM's role), all notes (with their `revealed_to` allowlists), and the **session window** — all sessions in `prep`, the single session with the largest `ended_at`, and the running session if any. See § Content types pulled.
 3. Module reconciles into the six kind-journals + Notes journal + per-session journals under the `GMhub Sessions` folder:
    - Items with a known external-ID flag → updated in place.
    - Items unknown locally → created.
    - Items removed from GMhub → deleted from Foundry (or archived; see open design decision #2).
-4. Foundry permissions reset to match GMhub visibility for each item.
-5. **Orphan handling for session journals.** Session journals in the `GMhub Sessions` folder that fall outside the new window (e.g. a previous "most-recent recap" superseded by a fresh end) are **deleted** on Pull, *unless* they carry unpushed dirty edits — those are skipped with a warning toast so the GM can Push or manually resolve before the next Pull. This is consistent with the direction-wins conflict policy: Pull overwrites Foundry, but never destroys un-pushed local work silently.
+4. Foundry permissions reset to match GMhub visibility for each item — including per-user ownership when a note has a non-empty `revealed_to` list.
+5. If any note references a GMhub user id that is not yet in the `playerMap` mapping, Pull emits a single warning toast listing the missing ids so the GM can configure them via Module Settings → Configure player mapping.
+6. **Orphan handling for session journals.** Session journals in the `GMhub Sessions` folder that fall outside the new window (e.g. a previous "most-recent recap" superseded by a fresh end) are **deleted** on Pull, *unless* they carry unpushed dirty edits — those are skipped with a warning toast so the GM can Push or manually resolve before the next Pull. This is consistent with the direction-wins conflict policy: Pull overwrites Foundry, but never destroys un-pushed local work silently.
 
 ### Push
 1. GM clicks **Push to GMhub**.
 2. Module collects everything GMhub-linked in Foundry (anything carrying the module's external-ID flag) plus any new pages in the kind-journals/Notes journal.
 3. Module sends a single batched payload of: edits, new entries (with entity_kind inferred from parent journal), visibility changes, quick-notes captured this session, **and plan edits routed to whichever session journal carries the dirty page** (not just the active session).
-4. GMhub responds with assigned IDs for new rows; the module writes those IDs back into Foundry flags so the next push updates instead of creating.
+4. GMhub responds with assigned IDs for new rows; the module writes those IDs back into Foundry flags so the next push updates instead of creating. **Selective reveal toggles are not part of the batched Push** — they're applied immediately when the GM saves the per-note Reveal Menu dialog, since they require an interactive recipient picker and the API endpoint is idempotent.
 
 ### Quick notes
 - Foundry has a quick-capture surface (chat command `/qn ...`, or a sidebar button) available during a live session.

@@ -58,9 +58,6 @@ export class GmhubClient {
 
     let res = await doFetch();
 
-    // 401 missing_credentials: re-read settings once and retry — catches the
-    // "GM just pasted the key" race where the module instance was constructed
-    // before the world had a token configured.
     if (res.status === 401) {
       const reread = this.getApiKey();
       if (reread && reread !== key) {
@@ -98,6 +95,19 @@ export class GmhubClient {
   /** GET /campaigns/{id} — campaign metadata + role. */
   getCampaign(campaignId) {
     return this._request("GET", `/campaigns/${encodeURIComponent(campaignId)}`);
+  }
+
+  /**
+   * GET /campaigns/{id}/players — list of campaign players for the
+   * selective-reveal UI (0015). Returns a flat array of
+   * { user_id, display_name }.
+   */
+  async getPlayers(campaignId) {
+    const page = await this._request(
+      "GET",
+      `/campaigns/${encodeURIComponent(campaignId)}/players`
+    );
+    return Array.isArray(page) ? page : page?.data ?? [];
   }
 
   // ---- Entities ----
@@ -219,6 +229,19 @@ export class GmhubClient {
     );
   }
 
+  /**
+   * PATCH /campaigns/{id}/notes/{noteId}/player-reveal — selective
+   * reveal (0015). Body: { add?: string[], remove?: string[] } of
+   * GMhub user ids. GM-only on the server; returns 204.
+   */
+  setNotePlayerReveal(campaignId, noteId, diff) {
+    return this._request(
+      "PATCH",
+      `/campaigns/${encodeURIComponent(campaignId)}/notes/${encodeURIComponent(noteId)}/player-reveal`,
+      { add: diff?.add ?? [], remove: diff?.remove ?? [] }
+    );
+  }
+
   // ---- Sessions ----
 
   /** GET /campaigns/{id}/sessions — paginated list (used by E10's picker). */
@@ -229,8 +252,6 @@ export class GmhubClient {
       undefined,
       opts
     );
-    // The picker UI just wants a flat list; if the caller doesn't pass a
-    // cursor, the convenience contract is to return data directly.
     return Array.isArray(page) ? page : page?.data ?? [];
   }
 
@@ -297,11 +318,8 @@ export class GmhubClient {
   // ---- Helpers ----
 
   /**
-   * Walk every page of a list endpoint, yielding individual rows. Caller:
-   *   for await (const e of client.iterateAll((opts) => client.listEntities(cid, opts))) { … }
-   *
-   * Stops when meta.cursor is null. Bounded by `safetyLimit` to avoid runaway
-   * loops if the server ever returns a stuck cursor.
+   * Walk every page of a list endpoint, yielding individual rows.
+   * Stops when meta.cursor is null. Bounded by `safetyLimit`.
    */
   async *iterateAll(listFn, args = {}, safetyLimit = 1000) {
     let cursor = args.cursor ?? null;

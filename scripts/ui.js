@@ -1,18 +1,14 @@
 // GMhub VTT Bridge — Foundry Application classes (GMHUB-153 / E10).
 //
-// Three dialogs:
-//   SyncDialog          The main hub. Renders one of three states:
-//                         • no campaign → button to module settings
-//                         • campaign set, no session → "Pick session" button
-//                         • ready → ping / pull / push / re-pick session
-//   PickSessionDialog   Lists prepped sessions for the bound campaign;
-//                         selecting one writes activeSessionId and closes.
-//   ConfirmOverwriteDialog
-//                       Pre-pull warning when local journals carry
-//                         flags.gmhub-vtt.dirty (unpushed edits).
-//
-// The actual pull/push wiring lands in E12; the friendly-error toasts in E13.
-// Test Connection wiring lands in E13. Scope of E10 is scaffolding only.
+// Dialogs:
+//   SyncDialog          The main hub.
+//   PickSessionDialog   Lists prepped sessions for the bound campaign.
+//   ConfirmOverwriteDialog Pre-pull warning when local journals are dirty.
+//   AgendaEditorDialog  Structured agenda/pinned editor.
+//   PlayerMapDialog     (0015) GM-only mapping of GMhub players to
+//                       Foundry users, used by selective-reveal sync.
+//   RevealMenuDialog    (0015) Per-note popover that grants/revokes
+//                       per-player access via the gmhub-app API.
 
 import { MODULE_ID } from "./main.js";
 import { describePingFailure, describePingResult, safeCall } from "./error-toaster.js";
@@ -25,8 +21,6 @@ function statusLabel(session) {
   return "prep";
 }
 
-// Map a session's status label to which lifecycle transitions are valid for it.
-// Mirrors the server-side state machine in gmhub-app's lifecycle route.
 function lifecycleAvailableFor(status) {
   switch (status) {
     case "prep":   return { start: true,  pause: false, resume: false, end: false };
@@ -46,9 +40,6 @@ export class SyncDialog extends Application {
     this.sync = sync;
     this.status = "";
     this.output = "";
-    // Cached session-status state; populated by _refreshSessionStatus on
-    // dialog open and after each lifecycle transition. Per SCOPE "Manual sync
-    // only" — never polled.
     this.sessionStatus = null;
     this.sessionStatusError = null;
     this.lifecycleBusy = false;
@@ -213,8 +204,6 @@ export class SyncDialog extends Application {
           this._setStatus(game.i18n.localize("GMHUB.Notify.PullCancelled"));
           return;
         }
-        // 0.4.0: result.pulled.sessions is a count of session journals
-        // pulled (was sessionPlan: boolean).
         const r = result?.pulled ?? { entities: 0, notes: 0, sessions: 0 };
         const summary = `entities: ${r.entities}, notes: ${r.notes}, sessions: ${r.sessions}`;
         const errs = (result?.errors ?? []).map((e) => `${e.name}: ${e.message}`).join("\n");
@@ -256,8 +245,6 @@ export class SyncDialog extends Application {
       this._setStatus(game.i18n.localize("GMHUB.Notify.Pushing"));
       try {
         const result = await safeCall(() => this.sync.pushAll());
-        // 0.4.0: result.pushed.sessionPlans is a count of session journals
-        // pushed (was sessionPlan: boolean).
         const p = result?.pushed ?? { entities: 0, notes: 0, sessionPlans: 0, quickNotes: 0 };
         const summary = `entities: ${p.entities}, notes: ${p.notes}, sessions: ${p.sessionPlans}, quick notes: ${p.quickNotes}`;
         const errs = (result?.errors ?? []).map((e) => `${e.name}: ${e.message}`).join("\n");
@@ -353,10 +340,6 @@ export class PushPreviewDialog extends Application {
       notesUpdate: p.notes?.update ?? [],
       sessionPlanFields,
       sessionPlanLabel: sessionPlanFields.length ? sessionPlanFields.join(", ") : null,
-      // 0.4.0-δ: per-session breakdown for templates that want to show
-      // *which* sessions are dirty. Existing template renders the
-      // aggregated label above; future template work (GMV-9) can switch
-      // to this list.
       sessionPlanJournals: p.sessionPlanJournals ?? [],
       quickNotes: p.quickNotes ?? 0
     };
@@ -372,15 +355,11 @@ export class PushPreviewDialog extends Application {
   }
 }
 
-// Editor for the structured agenda + pinned payloads stored on the session
-// plan's pages as flags.gmhub-vtt.{agendaItems,pinnedRefs}. On save it
-// rewrites the page flag, regenerates the rendered HTML preview, and marks
-// the page dirty so the next Push uploads the change. (GMHUB-161)
 export class AgendaEditorDialog extends Application {
   constructor({ page, kind } = {}, options = {}) {
     super(options);
     this.page = page;
-    this.kind = kind; // "agenda" | "pinned"
+    this.kind = kind;
     const flagKey = SESSION_PLAN_FLAGS[kind];
     const raw = page?.getFlag(MODULE_ID, flagKey) ?? [];
     this.items = JSON.parse(JSON.stringify(Array.isArray(raw) ? raw : []));
@@ -604,4 +583,251 @@ export class PickSessionDialog extends Application {
       this.close();
     });
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* 0015 — Player slot mapping (GM-only world setting submenu)          */
+/* ------------------------------------------------------------------ */
+
+export class PlayerMapDialog extends FormApplication {
+  constructor(object = {}, options = {}) {
+    super(object, options);
+    this.players = [];
+    this.loading = true;
+    this.error = null;
+    this.mapping = { ...(game.settings.get(MODULE_ID, "playerMap") ?? {}) };
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "gmhub-player-map",
+      title: "GMhub Player Mapping",
+      template: `modules/${MODULE_ID}/templates/player-map.hbs`,
+      width: 560,
+      height: "auto",
+      classes: ["gmhub-player-map-dialog"],
+      closeOnSubmit: true,
+      submitOnChange: false,
+      submitOnClose: false
+    });
+  }
+
+  async _refresh() {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) {
+      this.loading = false;
+      this.error = game.i18n.localize("GMHUB.PickSession.NoCampaign");
+      this.players = [];
+      this.render(false);
+      return;
+    }
+    this.loading = true;
+    this.error = null;
+    this.render(false);
+    try {
+      const client = game.modules.get(MODULE_ID).api?.client;
+      if (!client) throw new Error("client_not_ready");
+      this.players = await client.getPlayers(campaignId);
+    } catch (err) {
+      this.error = err.message ?? String(err);
+      this.players = [];
+    }
+    this.loading = false;
+    this.render(false);
+  }
+
+  getData() {
+    const foundryUsers = (game.users?.contents ?? []).filter((u) => !u.isGM);
+    const rows = (this.players ?? []).map((p) => {
+      const mapped = this.mapping[p.user_id] ?? "";
+      const choices = foundryUsers.map((u) => ({
+        id: u.id,
+        name: u.name,
+        selected: u.id === mapped
+      }));
+      return {
+        user_id: p.user_id,
+        display_name: p.display_name,
+        choices
+      };
+    });
+    return {
+      loading: this.loading,
+      error: this.error,
+      empty: !this.loading && !this.error && rows.length === 0,
+      rows
+    };
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    if (this.loading && !this.error) this._refresh();
+    html.find('[data-action="refresh"]').on("click", () => this._refresh());
+  }
+
+  async _updateObject(_event, formData) {
+    const next = {};
+    for (const [key, value] of Object.entries(formData ?? {})) {
+      if (!key.startsWith("player.")) continue;
+      const userId = key.slice("player.".length);
+      if (typeof value === "string" && value.length > 0) {
+        next[userId] = value;
+      }
+    }
+    await game.settings.set(MODULE_ID, "playerMap", next);
+    ui.notifications?.info(game.i18n.localize("GMHUB.Notify.PlayerMapSaved"));
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* 0015 — Per-note selective reveal popover                            */
+/* ------------------------------------------------------------------ */
+
+export class RevealMenuDialog extends Application {
+  constructor({ page, client } = {}, options = {}) {
+    super(options);
+    this.page = page;
+    this.client = client;
+    this.players = [];
+    this.loading = true;
+    this.error = null;
+    this.pending = false;
+    const initial = page?.getFlag(MODULE_ID, "revealedTo") ?? [];
+    this.selected = new Set(Array.isArray(initial) ? initial : []);
+    this.initial = new Set(this.selected);
+  }
+
+  static get defaultOptions() {
+    return foundry.utils.mergeObject(super.defaultOptions, {
+      id: "gmhub-reveal-menu",
+      title: "Reveal to specific players",
+      template: `modules/${MODULE_ID}/templates/reveal-menu.hbs`,
+      width: 480,
+      height: "auto",
+      classes: ["gmhub-reveal-menu-dialog"]
+    });
+  }
+
+  async _refresh() {
+    const campaignId = game.settings.get(MODULE_ID, "campaignId");
+    if (!campaignId) {
+      this.loading = false;
+      this.error = game.i18n.localize("GMHUB.PickSession.NoCampaign");
+      this.render(false);
+      return;
+    }
+    if (!this.client) {
+      this.loading = false;
+      this.error = "client_not_ready";
+      this.render(false);
+      return;
+    }
+    this.loading = true;
+    this.error = null;
+    this.render(false);
+    try {
+      this.players = await this.client.getPlayers(campaignId);
+    } catch (err) {
+      this.error = err.message ?? String(err);
+      this.players = [];
+    }
+    this.loading = false;
+    this.render(false);
+  }
+
+  getData() {
+    const playerMap = game.settings.get(MODULE_ID, "playerMap") ?? {};
+    const rows = (this.players ?? []).map((p) => ({
+      user_id: p.user_id,
+      display_name: p.display_name,
+      checked: this.selected.has(p.user_id),
+      unmapped: !playerMap[p.user_id]
+    }));
+    const anyUnmapped = rows.some((r) => r.unmapped);
+    return {
+      loading: this.loading,
+      error: this.error,
+      empty: !this.loading && !this.error && rows.length === 0,
+      pending: this.pending,
+      anyUnmapped,
+      rows
+    };
+  }
+
+  activateListeners(html) {
+    super.activateListeners(html);
+    if (this.loading && !this.error) this._refresh();
+
+    html.find('[data-action="toggle"]').on("change", (evt) => {
+      const userId = evt.currentTarget.dataset.userId;
+      if (!userId) return;
+      if (evt.currentTarget.checked) {
+        this.selected.add(userId);
+      } else {
+        this.selected.delete(userId);
+      }
+    });
+
+    html.find('[data-action="select-all"]').on("click", () => {
+      for (const p of this.players) this.selected.add(p.user_id);
+      this.render(false);
+    });
+
+    html.find('[data-action="clear-all"]').on("click", () => {
+      this.selected.clear();
+      this.render(false);
+    });
+
+    html.find('[data-action="cancel"]').on("click", () => this.close());
+
+    html.find('[data-action="save"]').on("click", async () => {
+      if (this.pending) return;
+      const campaignId = game.settings.get(MODULE_ID, "campaignId");
+      const noteId = this.page?.getFlag(MODULE_ID, "externalId");
+      if (!campaignId || !noteId) {
+        ui.notifications?.error(game.i18n.localize("GMHUB.Notify.RevealFailed"));
+        return;
+      }
+
+      const add = [];
+      const remove = [];
+      for (const id of this.selected) {
+        if (!this.initial.has(id)) add.push(id);
+      }
+      for (const id of this.initial) {
+        if (!this.selected.has(id)) remove.push(id);
+      }
+      if (add.length === 0 && remove.length === 0) {
+        this.close();
+        return;
+      }
+
+      this.pending = true;
+      this.render(false);
+      try {
+        await this.client.setNotePlayerReveal(campaignId, noteId, { add, remove });
+        const nextList = Array.from(this.selected);
+        await this.page.setFlag(MODULE_ID, "revealedTo", nextList);
+        // Refresh local ownership so the UI reflects the new access
+        // immediately, without waiting for the next Pull.
+        const { computePageOwnership } = await import("./sync.js");
+        const { ownership } = computePageOwnership({
+          visibility: this.page.getFlag(MODULE_ID, "visibility"),
+          revealedTo: nextList
+        });
+        await this.page.update({ ownership });
+        ui.notifications?.info(game.i18n.localize("GMHUB.Notify.RevealSaved"));
+        this.close();
+      } catch (err) {
+        this.pending = false;
+        ui.notifications?.error(err.message ?? game.i18n.localize("GMHUB.Notify.RevealFailed"));
+        this.render(false);
+      }
+    });
+  }
+}
+
+export function openRevealMenuForPage(page, client) {
+  if (!page || !client) return;
+  new RevealMenuDialog({ page, client }).render(true);
 }

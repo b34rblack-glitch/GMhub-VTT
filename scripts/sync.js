@@ -1,39 +1,21 @@
 // GMhub VTT Bridge — Pull/Push orchestration (GMHUB-155 / E12).
 //
 // Maps GMhub content to Foundry's journal model per GMhub-VTT/SCOPE.md
-// §"Foundry-side representation":
+// §"Foundry-side representation".
 //
-//   entities (NPCs, Locations, Factions, Items, Quests, Lore)
-//     → six JournalEntries, one per entity_kind (NPCs / Locations / …).
-//     → each entity is a page within its kind-journal.
-//   notes
-//     → a single "Notes" JournalEntry, one page per note.
-//   sessions (windowed, v0.4.0)
-//     → prep + most-recent ended + running session each become their own
-//        JournalEntry under the auto-created "GMhub Sessions" folder, with
-//        the same four pages (GM Notes, Agenda, GM Secrets, Pinned).
-//
-// Conflict policy is direction-wins (per SCOPE): Pull overwrites Foundry,
-// Push overwrites GMhub. Session orphans (journals outside the new pull
-// window) are deleted, unless they carry unpushed dirty edits — those are
-// skipped with a warning toast so the GM can resolve before next Pull.
-//
-// v0.4.1 enriches the Pinned page render: per-pin cards with type chip,
-// clickable Foundry content-link to the entity's page, first-paragraph
-// blurb pulled from the entity's already-synced summary, and an optional
-// quoted reason line when the API returns `pin_reason` (forward-compatible
-// with the gmhub-app pin-reason feature).
-//
-// Stable IDs travel via flags.gmhub-vtt.externalId on every synced page
-// AND every session JournalEntry. Re-syncs key off the flag; we never look
-// up by name.
+// 0015 (Selective Handout Reveal) — note pages carry a `revealedTo`
+// allowlist of GMhub user ids. When non-empty, page ownership becomes
+// per-Foundry-user via the GM-managed playerMap world setting (see
+// main.js). When empty, falls through to the legacy visibility-based
+// ownership branches.
 
 import { MODULE_ID } from "./main.js";
 
-const FLAG_KIND = "kind"; // "npc" | "location" | … | "notes" | "session"
+const FLAG_KIND = "kind";
 const FLAG_EXTERNAL_ID = "externalId";
 const FLAG_VISIBILITY = "visibility";
 const FLAG_REVEALED_AT = "revealedAt";
+const FLAG_REVEALED_TO = "revealedTo";
 const FLAG_DIRTY = "dirty";
 const FLAG_ENTITY_TYPE = "entityType";
 const FLAG_AGENDA_DATA = "agendaItems";
@@ -56,10 +38,6 @@ const SESSION_PAGE_AGENDA = "Agenda";
 const SESSION_PAGE_SECRETS = "GM Secrets";
 const SESSION_PAGE_PINNED = "Pinned";
 
-// Compute the session pull window per SCOPE § Content types pulled:
-//   - all sessions in `prep` state (no started_at)
-//   - the single most-recently-ended session (largest ended_at)
-//   - the running session if any (started_at && !ended_at)
 function computeSessionWindow(sessions) {
   const list = Array.isArray(sessions) ? sessions : [];
   const prep = list.filter((s) => s && !s.started_at && !s.ended_at);
@@ -102,11 +80,6 @@ async function ensureSessionFolder() {
   });
 }
 
-// v0.4.1: Locate the JournalEntryPage for a GMhub entity by its server-
-// side id. Walks the six kind-journals (already populated earlier in the
-// same Pull, since pullAll pulls entities before sessions). Returns null
-// if the entity isn't synced into this Foundry world yet — callers should
-// fall back to a name-only render and surface a "Pull to populate" hint.
 function _findEntityPageById(entityId) {
   if (!entityId) return null;
   for (const kind of Object.keys(KIND_JOURNAL_NAMES)) {
@@ -133,11 +106,6 @@ function _escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
-// v0.4.1: Extract a short text blurb from rendered HTML. Used by
-// `pinnedHtml` to surface the first paragraph of an entity's summary on
-// each pinned card without dragging in the full body. Heuristic: take the
-// content of the first <p>...</p>; fall back to tag-stripped first 200
-// chars when no paragraph wrapper is present.
 function _firstParagraphFromHtml(html) {
   if (!html) return "";
   const str = String(html);
@@ -244,18 +212,67 @@ function gmUserId() {
   return game.users.find((u) => u.isGM)?.id ?? game.user.id;
 }
 
-export function entityVisibilityToOwnership(visibility) {
+function _playerMap() {
+  try {
+    return game.settings.get(MODULE_ID, "playerMap") ?? {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Compute the Foundry `JournalEntryPage.ownership` map for a page.
+ *
+ * 0015 (Selective Handout Reveal):
+ *   - If `revealedTo` is a non-empty array of GMhub user ids, the page
+ *     becomes default-NONE with the GM as OWNER and each mapped
+ *     Foundry user as OBSERVER. GMhub user ids that are not in the
+ *     playerMap are skipped (and surfaced via the caller's warning).
+ *   - Otherwise the legacy visibility branches apply: gm_only / private
+ *     hide from non-GMs; campaign / players_only show to everyone.
+ *
+ * @param {object} args
+ * @param {string=} args.visibility note_visibility from GMhub
+ * @param {string[]=} args.revealedTo GMhub user ids granted access
+ * @returns {{ skippedRevealedIds: string[], ownership: Record<string, number> }}
+ */
+export function computePageOwnership({ visibility, revealedTo } = {}) {
   const { NONE, OBSERVER, OWNER } = ownershipLevels();
   const gmId = gmUserId();
+  const skippedRevealedIds = [];
+
+  if (Array.isArray(revealedTo) && revealedTo.length > 0) {
+    const map = _playerMap();
+    const ownership = { default: NONE, [gmId]: OWNER };
+    for (const gmhubUserId of revealedTo) {
+      const foundryUserId = map?.[gmhubUserId];
+      if (foundryUserId && game.users?.get?.(foundryUserId)) {
+        ownership[foundryUserId] = OBSERVER;
+      } else {
+        skippedRevealedIds.push(gmhubUserId);
+      }
+    }
+    return { ownership, skippedRevealedIds };
+  }
+
   switch (visibility) {
     case "private":
     case "gm_only":
-      return { default: NONE, [gmId]: OWNER };
+      return { ownership: { default: NONE, [gmId]: OWNER }, skippedRevealedIds };
     case "players_only":
     case "campaign":
     default:
-      return { default: OBSERVER, [gmId]: OWNER };
+      return { ownership: { default: OBSERVER, [gmId]: OWNER }, skippedRevealedIds };
   }
+}
+
+/**
+ * @deprecated Kept as a thin wrapper for callers that don't yet thread
+ * the `revealedTo` allowlist. New call sites should use
+ * `computePageOwnership` directly.
+ */
+export function entityVisibilityToOwnership(visibility) {
+  return computePageOwnership({ visibility, revealedTo: [] }).ownership;
 }
 
 export const SESSION_PLAN_FLAGS = {
@@ -276,13 +293,6 @@ export function renderPinnedHtml(pinned) {
   return pinnedHtml(pinned);
 }
 
-// v0.4.1: render each pin as a card with type chip + clickable Foundry
-// content-link to the entity's page + first-paragraph blurb pulled from
-// the synced entity. When the entity isn't in this Foundry world yet
-// (cross-campaign, not pulled, or deleted), fall back to a name-only row
-// with a "Pull to populate" hint. `pin_reason` is rendered as a quoted
-// blockquote line when present — forward-compatible with the gmhub-app
-// pin-reason feature; absent fields cleanly no-op.
 function pinnedHtml(pinned) {
   if (!Array.isArray(pinned) || pinned.length === 0) {
     return "<p><em>No pinned entities.</em></p>";
@@ -328,11 +338,6 @@ function pinnedHtml(pinned) {
   return `<ul class="gmhub-pinned-list">\n${items}\n</ul>`;
 }
 
-// v0.4.1: Per-scene entity chips become Foundry content-links when the
-// referenced entity is synced into this world (clickable, opens the
-// entity page in Foundry). Falls back to the static span chip when the
-// entity isn't pulled. The .gmhub-scene-entity-chip CSS class is shared
-// between both forms so styling stays consistent.
 function agendaHtml(agenda) {
   if (!Array.isArray(agenda) || agenda.length === 0) {
     return "<p><em>No agenda items.</em></p>";
@@ -415,11 +420,15 @@ export class SyncService {
   }
 
   _entityPagePayload(entity) {
+    const { ownership } = computePageOwnership({
+      visibility: entity.visibility,
+      revealedTo: []
+    });
     return {
       name: entity.name,
       type: "text",
       text: { content: tiptapToHtml(entity.summary), format: 1 /* HTML */ },
-      ownership: entityVisibilityToOwnership(entity.visibility),
+      ownership,
       flags: {
         [MODULE_ID]: {
           [FLAG_EXTERNAL_ID]: entity.id,
@@ -433,18 +442,27 @@ export class SyncService {
   }
 
   _notePagePayload(note) {
+    const revealedTo = Array.isArray(note?.revealed_to) ? note.revealed_to : [];
+    const { ownership, skippedRevealedIds } = computePageOwnership({
+      visibility: note.visibility,
+      revealedTo
+    });
     return {
-      name: note.title ?? "Untitled note",
-      type: "text",
-      text: { content: tiptapToHtml(note.body), format: 1 },
-      ownership: entityVisibilityToOwnership(note.visibility),
-      flags: {
-        [MODULE_ID]: {
-          [FLAG_EXTERNAL_ID]: note.id,
-          [FLAG_VISIBILITY]: note.visibility,
-          [FLAG_DIRTY]: false
+      payload: {
+        name: note.title ?? "Untitled note",
+        type: "text",
+        text: { content: tiptapToHtml(note.body), format: 1 },
+        ownership,
+        flags: {
+          [MODULE_ID]: {
+            [FLAG_EXTERNAL_ID]: note.id,
+            [FLAG_VISIBILITY]: note.visibility,
+            [FLAG_REVEALED_TO]: revealedTo,
+            [FLAG_DIRTY]: false
+          }
         }
-      }
+      },
+      skippedRevealedIds
     };
   }
 
@@ -588,18 +606,34 @@ export class SyncService {
       }
     }
 
+    // 0015: collect every unmapped GMhub user id surfaced by note pulls
+    // and emit a single warning at the end so the GM can configure the
+    // playerMap setting before relying on selective reveals.
+    const unmappedFromNotes = new Set();
     try {
       const notesJournal = await this._findOrCreateJournal(NOTES_JOURNAL_NAME, "notes");
       for await (const note of this.client.iterateAll(
         (opts) => this.client.listNotes(campaignId, { ...opts, limit: 100 }),
         {}
       )) {
-        await this._upsertPage(notesJournal, note.id, this._notePagePayload(note));
+        const { payload, skippedRevealedIds } = this._notePagePayload(note);
+        for (const id of skippedRevealedIds) unmappedFromNotes.add(id);
+        await this._upsertPage(notesJournal, note.id, payload);
         result.pulled.notes += 1;
       }
       await notesJournal.unsetFlag(MODULE_ID, FLAG_DIRTY).catch(() => {});
     } catch (err) {
       result.errors.push({ name: NOTES_JOURNAL_NAME, message: err.message ?? String(err) });
+    }
+
+    if (unmappedFromNotes.size > 0) {
+      const list = Array.from(unmappedFromNotes).join(", ");
+      ui.notifications?.warn(
+        game.i18n.format("GMHUB.Warn.UnmappedReveals", {
+          count: unmappedFromNotes.size,
+          ids: list
+        })
+      );
     }
 
     let pulledSessionIds = new Set();
