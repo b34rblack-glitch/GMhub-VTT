@@ -1,11 +1,34 @@
+{{!--
+  templates/visibility.hbs
+  ===========================================================================
+  GMhub VTT Bridge — VisibilityDialog body.
+
+  Rendered by `ui.js#VisibilityDialog`. 0016 (Unified Visibility):
+  single per-page editor for the GMhub `{ visibility, recipients }`
+  tuple. Replaces the legacy reveal menu + Foundry's eye-toggle
+  reverse-mapper.
+
+  Layout has two zones:
+    - Top: radio group choosing the visibility mode
+      (private / shared / everyone)
+    - Conditional: when "shared" is selected, a checkbox list of
+      campaign members to grant access to
+
+  Save writes via PATCH /notes/{id} so the server is the single source
+  of truth — local flags + Foundry ownership are mirrored in afterwards.
+--}}
 <div class="gmhub-visibility">
+  {{!-- Explanatory copy at the top. --}}
   <p>{{localize "GMHUB.Dialog.Visibility.Body"}}</p>
 
+  {{!-- Loading / error guards before the editor renders. --}}
   {{#if loading}}
     <p><em>{{localize "GMHUB.PickSession.Loading"}}</em></p>
   {{else if error}}
     <p class="gmhub-error">{{error}}</p>
   {{else}}
+    {{!-- Visibility mode picker. Same radio group, three options.
+         `data-action="set-visibility"` is what the JS handler listens for. --}}
     <div class="gmhub-visibility-radios">
       <label>
         <input type="radio" name="gmhub-visibility" value="private" data-action="set-visibility" {{#if isPrivate}}checked{{/if}}>
@@ -21,20 +44,29 @@
       </label>
     </div>
 
+    {{!-- Recipient picker — only relevant in `shared` mode. The
+         private/everyone modes don't take per-user recipients. --}}
     {{#if isShared}}
       {{#if empty}}
         <p><em>{{localize "GMHUB.Dialog.Visibility.Empty"}}</em></p>
       {{else}}
+        {{!-- Warn (once) when any selected recipient lacks a player
+             mapping — those rows will be silently dropped on Pull. --}}
         {{#if anyUnmapped}}
           <p class="gmhub-warn">{{localize "GMHUB.Dialog.Visibility.RequiresMapping"}}</p>
         {{/if}}
         <ul class="gmhub-visibility-list">
           {{#each rows}}
             <li>
+              {{!-- Whole row is a label so clicking the name toggles
+                   the checkbox (better hit target on touch). --}}
               <label>
                 <input type="checkbox" data-action="toggle" data-user-id="{{this.user_id}}" {{#if this.checked}}checked{{/if}}>
                 <span class="gmhub-visibility-name">{{this.display_name}}</span>
                 <span class="gmhub-visibility-role">{{this.role}}</span>
+                {{!-- Per-row warning chip when this individual player
+                     has no Foundry mapping. Tooltip surfaces the
+                     full explanation on hover. --}}
                 {{#if this.unmapped}}
                   <span class="gmhub-visibility-warning" title="{{localize 'GMHUB.Dialog.Visibility.RequiresMapping'}}"><i class="fas fa-exclamation-triangle"></i></span>
                 {{/if}}
@@ -46,6 +78,8 @@
     {{/if}}
 
     <footer class="gmhub-visibility-footer">
+      {{!-- Bulk-select toolbar — only useful when the per-user list
+           is visible (i.e. in `shared` mode). --}}
       {{#if isShared}}
         <div class="gmhub-visibility-bulk">
           <button type="button" data-action="select-all" {{#if pending}}disabled{{/if}}>
@@ -56,6 +90,8 @@
           </button>
         </div>
       {{/if}}
+      {{!-- Save / Cancel row. `pending` disables both during the
+           PATCH so double-clicks don't fire two requests. --}}
       <div class="gmhub-visibility-actions">
         <button type="button" data-action="cancel" {{#if pending}}disabled{{/if}}>
           {{localize "GMHUB.Button.Cancel"}}

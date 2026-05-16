@@ -1,9 +1,28 @@
+{{!--
+  templates/lifecycle-confirm.hbs
+  ===========================================================================
+  GMhub VTT Bridge — LifecycleConfirmDialog body.
+
+  Rendered by `ui.js#LifecycleConfirmDialog`. Used today only by the
+  "End session" button (lifecycle transitions other than `end` are
+  reversible enough to fire without a confirm).
+
+  Three things are dynamic via i18n keys derived from the action name:
+    - title (set on the Application, not here)
+    - body copy (`bodyKey`)
+    - confirm button label (`confirmKey`)
+--}}
 <div class="gmhub-lifecycle-confirm">
+  {{!-- Body copy is action-specific (e.g. "ending a session is
+       irreversible — players will see the recap..."). --}}
   <p>{{localize bodyKey}}</p>
   <footer class="gmhub-dialog-buttons">
+    {{!-- Cancel is the safe default on the left. --}}
     <button type="button" data-action="cancel">
       <i class="fas fa-times"></i> {{localize "GMHUB.Button.Cancel"}}
     </button>
+    {{!-- Confirm uses the destructive class — warning-red background
+         so the GM has to actively choose the irreversible action. --}}
     <button type="button" data-action="confirm" class="gmhub-confirm-destructive">
       <i class="fas fa-check"></i> {{localize confirmKey}}
     </button>

@@ -1,19 +1,37 @@
+{{!--
+  templates/confirm-overwrite.hbs
+  ===========================================================================
+  GMhub VTT Bridge — ConfirmOverwriteDialog body.
+
+  Rendered by `ui.js#ConfirmOverwriteDialog`. Shown before a Pull when
+  the local world has unpushed dirty journals — gives the GM a chance
+  to bail out instead of clobbering local work.
+
+  The list of dirty entries is rendered by name so the GM can decide
+  whether to cancel + Push first, or accept the data loss.
+--}}
 <div class="gmhub-confirm-overwrite">
+  {{!-- Warning headline with the standard triangle icon. --}}
   <p class="gmhub-warning">
     <i class="fas fa-exclamation-triangle"></i>
     {{localize "GMHUB.ConfirmOverwrite.Body"}}
   </p>
 
+  {{!-- "You have N unpushed edits" — split into prefix/suffix strings
+       so localizers can rearrange the bolded number for their language. --}}
   {{#if dirtyCount}}
     <p>{{localize "GMHUB.ConfirmOverwrite.UnpushedCountPrefix"}} <strong>{{dirtyCount}}</strong> {{localize "GMHUB.ConfirmOverwrite.UnpushedCountSuffix"}}</p>
   {{/if}}
 
+  {{!-- Named list of journals about to be overwritten. --}}
   <ul>
     {{#each dirtyEntries}}
       <li><strong>{{this.name}}</strong></li>
     {{/each}}
   </ul>
 
+  {{!-- Cancel (safe default) on the left; destructive Overwrite CTA
+       on the right uses the danger class for visual emphasis. --}}
   <footer class="gmhub-confirm-actions">
     <button type="button" data-action="cancel">
       <i class="fas fa-times"></i> {{localize "GMHUB.Button.Cancel"}}

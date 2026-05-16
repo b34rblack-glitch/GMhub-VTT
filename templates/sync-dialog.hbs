@@ -1,7 +1,26 @@
+{{!--
+  templates/sync-dialog.hbs
+  ===========================================================================
+  GMhub VTT Bridge — SyncDialog body.
+
+  Rendered by `ui.js#SyncDialog`. The dialog is the module's main entry
+  point and surfaces:
+    - Connection info (base URL, campaign, active session, last pull)
+    - Setup prompts when campaign / session are missing
+    - Session-lifecycle controls (start / pause / resume / end)
+    - Sync actions (Ping / Pull / Push / Pick Session)
+    - Inline status banner + <pre> output panel
+
+  Every visible string flows through `{{localize}}` so en.json is the
+  single source of truth for copy.
+--}}
 <div class="gmhub-sync">
+  {{!-- Read-only configuration summary at the top of the dialog. --}}
   <section class="gmhub-info">
     <p><strong>{{localize "GMHUB.Dialog.BaseUrlLabel"}}</strong> {{baseUrl}}</p>
     <p><strong>{{localize "GMHUB.Dialog.CampaignIdLabel"}}</strong>
+      {{!-- Empty campaign renders as italicized "Not set" so the GM
+           knows what to fix. --}}
       {{#if campaignId}}<code>{{campaignId}}</code>{{else}}<em>{{localize "GMHUB.Dialog.NotSet"}}</em>{{/if}}
     </p>
     <p><strong>{{localize "GMHUB.Dialog.ActiveSessionLabel"}}</strong>
@@ -10,6 +29,9 @@
     <p><strong>{{localize "GMHUB.Dialog.LastPullLabel"}}</strong> {{lastPullAt}}</p>
   </section>
 
+  {{!-- Setup gate #1: no campaign bound — every other action would
+       fail with "no_campaign_bound", so we hide them and surface a
+       shortcut to the module settings. --}}
   {{#unless campaignId}}
     <section class="gmhub-empty">
       <p>{{localize "GMHUB.Dialog.NoCampaignBody"}}</p>
@@ -18,6 +40,9 @@
       </button>
     </section>
   {{else}}
+    {{!-- Setup gate #2: campaign bound but no active session — Pull /
+         Push are disabled below, so we promote the PickSession button
+         here too. --}}
     {{#unless activeSessionId}}
       <section class="gmhub-empty">
         <p>{{localize "GMHUB.Dialog.NoSessionBody"}}</p>
@@ -27,20 +52,30 @@
       </section>
     {{/unless}}
 
+    {{!-- Lifecycle subpanel — only renders when we have an active
+         session to operate on. Tri-state status (known / unknown /
+         loading) keeps the GM informed during the round-trip. --}}
     {{#if activeSessionId}}
       <section class="gmhub-lifecycle">
         <p class="gmhub-lifecycle-state">
           <strong>{{localize "GMHUB.Dialog.SessionStateLabel"}}</strong>
           {{#if sessionStatus}}
+            {{!-- Known status from the most-recent getSession call. --}}
             <code>{{sessionStatus}}</code>
           {{else if sessionStatusError}}
+            {{!-- API call failed — show "unknown" rather than nothing. --}}
             <em>{{localize "GMHUB.Dialog.SessionStateUnknown"}}</em>
           {{else}}
+            {{!-- Initial state before _refreshSessionStatus resolves. --}}
             <em>{{localize "GMHUB.Dialog.SessionStateLoading"}}</em>
           {{/if}}
         </p>
+        {{!-- Only render the button row when at least one transition
+             is legal in the current status (computed in JS). --}}
         {{#if anyLifecycleVisible}}
           <div class="gmhub-lifecycle-buttons">
+            {{!-- Each button is gated on its individual lifecycle flag
+                 *and* disabled while a transition is in flight. --}}
             {{#if lifecycle.start}}
               <button type="button" data-action="session-start" {{#if lifecycleBusy}}disabled{{/if}}>
                 <i class="fas fa-play"></i> {{localize "GMHUB.Button.SessionStart"}}
@@ -66,6 +101,9 @@
       </section>
     {{/if}}
 
+    {{!-- Primary sync action row. Pull/Push are disabled until a
+         session is bound so the GM doesn't get a confusing
+         "no session" toast. --}}
     <section class="gmhub-actions">
       <button type="button" data-action="ping">
         <i class="fas fa-plug"></i> {{localize "GMHUB.Button.TestConnection"}}
@@ -82,9 +120,15 @@
     </section>
   {{/unless}}
 
+  {{!-- Inline status banner — populated by `_setStatus` after every
+       async action. Hidden when empty so the dialog doesn't sprout
+       blank stripes. --}}
   {{#if status}}
     <section class="gmhub-status"><p>{{status}}</p></section>
   {{/if}}
 
+  {{!-- Scrollable monospace output pane for multi-line results
+       (ping scopes, pull counts, push errors, ...). `data-role` is
+       used by tests to locate the element. --}}
   <pre data-role="sync-output" class="gmhub-output">{{output}}</pre>
 </div>

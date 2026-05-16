@@ -1,8 +1,40 @@
+/* =============================================================================
+ * styles/gmhub.css
+ * =============================================================================
+ *
+ * GMhub VTT Bridge — module-specific UI styling.
+ *
+ * PURPOSE:
+ *   Layers on top of Foundry's built-in dialog styles. Scoped under the
+ *   `.gmhub-*` class hierarchy so nothing here leaks into core Foundry
+ *   chrome or any other module's UI.
+ *
+ * SECTIONS (in source order):
+ *   1. Journal-directory sync button
+ *   2. SyncDialog layout (info / actions / lifecycle / status)
+ *   3. LifecycleConfirmDialog + destructive-action button
+ *   4. PushPreviewDialog tables + buttons
+ *   5. Generic empty-state styling
+ *   6. AgendaEditorDialog grid layout
+ *   7. SyncDialog status + result panels
+ *   8. Inline @mention chips inside Tiptap-rendered prose
+ *   9. Per-scene entity chips (agenda)
+ *  10. Active-session sidebar marker
+ *  11. Pinned-page card layout
+ * ============================================================================= */
+
+/* --- 1. Journal-directory sync button --------------------------------------
+ * The cloud-icon button injected into the Journals tab header by the
+ * renderJournalDirectory hook in main.js. white-space:nowrap so the
+ * "Open GMhub Sync" label never wraps mid-button on narrow sidebars. */
 .gmhub-sync-button {
   margin-left: 4px;
   white-space: nowrap;
 }
 
+/* --- 2. SyncDialog layout -------------------------------------------------
+ * Bordered "info" block at the top of the SyncDialog showing base URL,
+ * campaign, last-pull timestamp, etc. */
 .gmhub-sync .gmhub-info {
   border: 1px solid var(--color-border-light-tertiary);
   padding: 6px 10px;
@@ -11,10 +43,12 @@
   font-size: 13px;
 }
 
+/* Tighten paragraph spacing inside the info block. */
 .gmhub-sync .gmhub-info p {
   margin: 2px 0;
 }
 
+/* Vertical stack of action buttons (Ping / Pull / Push / Pick Session). */
 .gmhub-sync .gmhub-actions {
   display: flex;
   flex-direction: column;
@@ -22,6 +56,7 @@
   margin-bottom: 8px;
 }
 
+/* Lifecycle subpanel — visually mirrors the info block above. */
 .gmhub-sync .gmhub-lifecycle {
   border: 1px solid var(--color-border-light-tertiary);
   padding: 6px 10px;
@@ -29,17 +64,22 @@
   margin-bottom: 8px;
 }
 
+/* "Current status: live/paused/ended" line above the lifecycle buttons. */
 .gmhub-sync .gmhub-lifecycle-state {
   margin: 2px 0 6px;
   font-size: 13px;
 }
 
+/* Horizontal row of lifecycle buttons; flex-wrap so narrow dialogs
+ * don't horizontally scroll. */
 .gmhub-sync .gmhub-lifecycle-buttons {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
 
+/* --- 3. LifecycleConfirmDialog -------------------------------------------
+ * Right-aligned button row at the bottom of the confirm dialog. */
 .gmhub-lifecycle-confirm-dialog .gmhub-dialog-buttons {
   display: flex;
   justify-content: flex-end;
@@ -47,28 +87,35 @@
   margin-top: 10px;
 }
 
+/* Warning-red button used for the "End session" confirm. Falls back to
+ * a hard-coded crimson if the Foundry theme doesn't supply --color-warning. */
 .gmhub-confirm-destructive {
   background: var(--color-warning, #c0392b);
   color: white;
 }
 
+/* --- 4. PushPreviewDialog -------------------------------------------------
+ * Two-column counts table: left = label, right = numeric count. */
 .gmhub-push-preview-counts {
   width: 100%;
   margin: 8px 0;
   border-collapse: collapse;
 }
 
+/* Left-aligned label column header. */
 .gmhub-push-preview-counts th {
   text-align: left;
   padding: 4px 8px;
   font-weight: 600;
 }
 
+/* Right-aligned numeric column for easy column scanning. */
 .gmhub-push-preview-counts td {
   padding: 4px 8px;
   text-align: right;
 }
 
+/* Confirm/cancel buttons aligned to the right like every other dialog. */
 .gmhub-push-preview-dialog .gmhub-dialog-buttons {
   display: flex;
   justify-content: flex-end;
@@ -76,17 +123,25 @@
   margin-top: 10px;
 }
 
+/* --- 5. Generic empty-state ----------------------------------------------
+ * Re-used wherever the data array is empty (pinned cards, agenda items,
+ * push preview, picker results). Italic + dimmed signals "no data" without
+ * needing dialog-specific copy. */
 .gmhub-empty-state {
   font-style: italic;
   opacity: 0.8;
 }
 
+/* --- 6. AgendaEditorDialog -----------------------------------------------
+ * Numbered list of agenda rows. */
 .gmhub-agenda-editor .gmhub-agenda-list {
   list-style: decimal;
   padding-left: 24px;
   margin: 6px 0;
 }
 
+/* Per-row CSS grid: title (flex) | duration (70px) | controls (30px).
+ * The third column spans both grid rows so up/down/remove can stack. */
 .gmhub-agenda-editor .gmhub-agenda-row {
   display: grid;
   grid-template-columns: 1fr 70px 30px;
@@ -95,12 +150,15 @@
   align-items: start;
 }
 
+/* Notes textarea spans the title + duration columns of row 2. */
 .gmhub-agenda-editor .gmhub-agenda-notes {
   grid-column: 1 / 3;
   width: 100%;
   resize: vertical;
 }
 
+/* Per-row controls (up/down/remove) — stack vertically in the right
+ * column, spanning both grid rows. */
 .gmhub-agenda-editor .gmhub-agenda-controls {
   display: flex;
   flex-direction: column;
@@ -109,15 +167,18 @@
   grid-row: 1 / 3;
 }
 
+/* Square-ish per-row control buttons. */
 .gmhub-agenda-editor .gmhub-agenda-controls button {
   width: 28px;
   padding: 2px;
 }
 
+/* "+ Add" button at the bottom of the list. */
 .gmhub-agenda-editor .gmhub-agenda-add {
   margin: 4px 0 8px;
 }
 
+/* Right-aligned Save/Cancel buttons. */
 .gmhub-agenda-editor-dialog .gmhub-dialog-buttons {
   display: flex;
   justify-content: flex-end;
@@ -125,6 +186,9 @@
   margin-top: 10px;
 }
 
+/* --- 7. SyncDialog status + result panels ---------------------------------
+ * Inline status banner. Subtle backdrop + accent left border + italic
+ * copy says "this is operational state, not a notification". */
 .gmhub-sync .gmhub-status {
   background: rgba(0, 0, 0, 0.05);
   border-left: 3px solid var(--color-border-highlight);
@@ -133,20 +197,24 @@
   font-style: italic;
 }
 
+/* Subhead in the operation result panel. */
 .gmhub-sync .gmhub-result h3 {
   margin: 8px 0 4px;
   font-size: 14px;
 }
 
+/* Reset list padding so it lines up with the headline. */
 .gmhub-sync .gmhub-result ul {
   margin: 0;
   padding-left: 18px;
 }
 
+/* Collapsible "Show details" sections in the result panel. */
 .gmhub-sync details {
   margin-top: 6px;
 }
 
+/* Pointer cursor on the disclosure triangle to telegraph clickability. */
 .gmhub-sync details summary {
   cursor: pointer;
 }
@@ -176,6 +244,8 @@
   margin: 4px 0 0;
 }
 
+/* Pill-shaped chip background — slightly warmer than @mention so the
+ * two are visually distinguishable when interleaved in prose. */
 .gmhub-scene-entity-chip {
   display: inline-flex;
   align-items: center;
@@ -187,11 +257,14 @@
   white-space: nowrap;
 }
 
+/* When the chip is a clickable content-link, strip the default underline
+ * and inherit color so it doesn't look like a stray hyperlink. */
 a.gmhub-scene-entity-chip {
   text-decoration: none;
   color: inherit;
 }
 
+/* Hover state — darker background to signal interactivity. */
 a.gmhub-scene-entity-chip:hover {
   background: rgba(120, 113, 108, 0.28);
 }
@@ -207,6 +280,8 @@ a.gmhub-scene-entity-chip:hover {
   background: rgba(99, 102, 241, 0.06);
 }
 
+/* Bold the journal title for the active session row. Two selectors
+ * because Foundry rotated the class name across versions. */
 .gmhub-active-session .entry-name,
 .gmhub-active-session .document-name {
   font-weight: 600;
@@ -226,6 +301,8 @@ a.gmhub-scene-entity-chip:hover {
   gap: 8px;
 }
 
+/* Per-card chrome: tinted left border to echo the active-session marker
+ * (same indigo, gentler background). */
 .gmhub-pinned-card {
   border: 1px solid var(--color-border-light-tertiary);
   border-left: 3px solid #6366f1;
@@ -234,6 +311,8 @@ a.gmhub-scene-entity-chip:hover {
   background: rgba(99, 102, 241, 0.04);
 }
 
+/* Header row: [type chip] [entity name] aligned on baseline so the
+ * smaller chip sits nicely with the larger title. */
 .gmhub-pinned-header {
   display: flex;
   align-items: baseline;
@@ -241,6 +320,7 @@ a.gmhub-scene-entity-chip:hover {
   margin-bottom: 4px;
 }
 
+/* Small all-caps type chip (e.g. "NPC", "LOCATION"). */
 .gmhub-pinned-type {
   font-size: 0.75em;
   font-weight: 600;
@@ -251,26 +331,32 @@ a.gmhub-scene-entity-chip:hover {
   letter-spacing: 0.05em;
 }
 
+/* Entity name. Slightly oversized so it's the visual focus of the card. */
 .gmhub-pinned-name {
   font-size: 1.05em;
   font-weight: 600;
 }
 
+/* Clickable-name variant: drop the default underline / link color. */
 a.gmhub-pinned-name {
   text-decoration: none;
   color: inherit;
 }
 
+/* Add the underline back on hover so the link affordance is still discoverable. */
 a.gmhub-pinned-name:hover {
   text-decoration: underline;
 }
 
+/* Blurb body (first paragraph of the linked entity's summary). */
 .gmhub-pinned-blurb {
   font-size: 0.9em;
   opacity: 0.85;
   line-height: 1.4;
 }
 
+/* Optional pin_reason line. Italic + left-bar styling so it reads as
+ * "GM's note on why this is pinned" rather than additional blurb prose. */
 .gmhub-pinned-reason {
   margin-top: 6px;
   font-style: italic;

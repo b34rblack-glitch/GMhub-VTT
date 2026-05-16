@@ -1,4 +1,23 @@
+{{!--
+  templates/pick-session.hbs
+  ===========================================================================
+  GMhub VTT Bridge — PickSessionDialog body.
+
+  Rendered by `ui.js#PickSessionDialog`. Lists every session the
+  campaign has (any lifecycle state) and lets the GM bind one as the
+  active session. A four-way state machine drives the body:
+
+    loading  -> spinner copy
+    error    -> red error text + Refresh
+    sessions -> picker list (one button per session)
+    empty    -> "no sessions yet" copy
+
+  Clicking a row writes `gmhub-vtt.activeSessionId` and closes the
+  dialog (handled in `activateListeners`).
+--}}
 <div class="gmhub-pick-session">
+  {{!-- Header row: instructional copy + a Refresh button so the GM
+       can re-pull the list without closing the dialog. --}}
   <header class="gmhub-pick-header">
     <p>{{localize "GMHUB.PickSession.Body"}}</p>
     <button type="button" data-action="refresh">
@@ -6,18 +25,27 @@
     </button>
   </header>
 
+  {{!-- Four-way render based on the dialog's current state. --}}
   {{#if loading}}
     <p class="gmhub-pick-loading">{{localize "GMHUB.PickSession.Loading"}}</p>
   {{else if error}}
+    {{!-- Error path: surface the raw API error so the GM can copy it
+         into a bug report if needed. --}}
     <p class="gmhub-pick-error">{{error}}</p>
   {{else if sessions.length}}
+    {{!-- Happy path: one row per session as a full-width clickable
+         button (entire row is the hit target). --}}
     <ul class="gmhub-pick-list">
       {{#each sessions}}
         <li>
           <button type="button" data-action="pick" data-session-id="{{this.id}}" class="gmhub-pick-row">
             <span class="gmhub-pick-name">{{this.title}}</span>
             <span class="gmhub-pick-meta">
+              {{!-- Status label is derived from started_at/ended_at/
+                   paused_at in `statusLabel` (ui.js). --}}
               <span class="gmhub-pick-status">{{this.statusLabel}}</span>
+              {{!-- plan_state is server-supplied: "draft" / "ready" /
+                   etc. — pure informational badge. --}}
               <span class="gmhub-pick-plan">{{this.plan_state}}</span>
             </span>
           </button>
@@ -25,6 +53,7 @@
       {{/each}}
     </ul>
   {{else}}
+    {{!-- Empty-state copy: campaign exists but has no sessions yet. --}}
     <p class="gmhub-pick-empty">{{localize "GMHUB.PickSession.Empty"}}</p>
   {{/if}}
 </div>
