@@ -1,16 +1,38 @@
+{{!--
+  templates/player-map.hbs
+  ===========================================================================
+  GMhub VTT Bridge — PlayerMapDialog body.
+
+  Rendered by `ui.js#PlayerMapDialog` (a FormApplication). Lets the GM
+  associate each GMhub player user id with a Foundry user id. The
+  `shared` visibility path in sync.js uses this mapping to apply
+  per-user JournalEntryPage ownership; without a mapping, those
+  recipients silently get skipped and the GM sees a one-time warning
+  at Pull time.
+
+  Four-way state mirrors PickSessionDialog: loading / error / empty /
+  populated. Submit is wired by FormApplication itself (button[type=submit]).
+--}}
 <div class="gmhub-player-map">
+  {{!-- Explanatory copy: why this dialog exists. --}}
   <p>{{localize "GMHUB.Dialog.PlayerMap.Body"}}</p>
 
+  {{!-- State branch #1: still loading the members list. --}}
   {{#if loading}}
     <p><em>{{localize "GMHUB.Dialog.PlayerMap.Loading"}}</em></p>
   {{else if error}}
+    {{!-- State branch #2: load failed. Show the message + a Refresh
+         button so the GM can retry without closing the dialog. --}}
     <p class="gmhub-error">{{error}}</p>
     <button type="button" data-action="refresh">
       <i class="fas fa-sync"></i> {{localize "GMHUB.Button.Refresh"}}
     </button>
   {{else if empty}}
+    {{!-- State branch #3: campaign has no player members yet. --}}
     <p><em>{{localize "GMHUB.Dialog.PlayerMap.Empty"}}</em></p>
   {{else}}
+    {{!-- State branch #4: render the mapping table inside a <form>
+         so FormApplication can wire up submit handling for us. --}}
     <form>
       <table class="gmhub-player-map-table">
         <thead>
@@ -22,12 +44,19 @@
         <tbody>
           {{#each rows}}
             <tr>
+              {{!-- Left column: display name + raw id. The id is in
+                   a code element so the GM can copy it for support. --}}
               <td>
                 <span class="gmhub-player-name">{{this.display_name}}</span>
                 <code class="gmhub-player-id">{{this.user_id}}</code>
               </td>
               <td>
+                {{!-- Select name `player.<gmhub_id>` so the
+                     _updateObject handler can filter on that prefix
+                     and rebuild the mapping from scratch. --}}
                 <select name="player.{{this.user_id}}">
+                  {{!-- Explicit empty option so the GM can un-map
+                       a player without deleting any select markup. --}}
                   <option value="">{{localize "GMHUB.Dialog.PlayerMap.UnmappedOption"}}</option>
                   {{#each this.choices}}
                     <option value="{{this.id}}" {{#if this.selected}}selected{{/if}}>{{this.name}}</option>
@@ -39,6 +68,8 @@
         </tbody>
       </table>
 
+      {{!-- type=submit triggers FormApplication's submission flow,
+           which routes through _updateObject. --}}
       <footer class="gmhub-player-map-footer">
         <button type="submit">
           <i class="fas fa-save"></i> {{localize "GMHUB.Button.Save"}}
