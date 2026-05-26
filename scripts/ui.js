@@ -563,7 +563,7 @@ export class ConfirmOverwriteDialog extends Application {
 // =============================================================================
 // Lists every session the campaign has (prep/live/paused/ended) and
 // lets the GM bind one as the active session. Used by the Sync dialog
-// button and the module's public API.
+// button and the module's exported API.
 // =============================================================================
 export class PickSessionDialog extends Application {
   constructor(client, options = {}) {

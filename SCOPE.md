@@ -7,7 +7,7 @@ This document captures the agreed intent for the GMhub-VTT Foundry module.
 
 ## Mission
 
-GMhub-VTT is a Foundry VTT module that lets a GM run a live tabletop session inside Foundry while keeping their GMhub campaign as the canonical archive of campaign content.
+GMhub-VTT is the **first-party** Foundry VTT module that lets a GM run a live tabletop session inside Foundry while keeping their GMhub campaign as the canonical archive of campaign content. It is the **only sanctioned consumer** of the gmhub-app `/api/v1` surface — that API is internal, not public (see `gmhub-app/SCOPE.md` § Out of scope, closed 2026-05-26).
 
 Sync is **explicit and manual**: the GM presses **Pull** to load GMhub content into Foundry, and **Push** to send their table-side work back.
 
@@ -87,6 +87,7 @@ The per-page eye toggle in the Foundry sidebar still works locally but is not sy
 | Non-GM-driven syncs                              | All sync is GM-initiated.                                           |
 | Encounter builder, AI assistant, Stripe          | Not module concerns.                                                |
 | Full session history in Foundry                  | Pull is windowed.                                                   |
+| **Use as a reference / base for third-party clients of gmhub-app** | The gmhub-app `/api/v1` surface is internal; this module is its only sanctioned consumer. Forks of this module repurposed as alternative clients of gmhub.app are not permitted (see `gmhub-app/SCOPE.md` § Out of scope). |
 
 ## Behaviour contracts
 

@@ -23,7 +23,7 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Key | Value |
 |---|---|
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT` |
-| Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
+| Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the internal `/api/v1` surface as Epic E — first-party only, no public docs) |
 | Module ID | `gmhub-vtt` |
 | Current version | `0.4.4` |
 | Foundry compat | v11 minimum, v14 verified, v14 maximum |
@@ -65,10 +65,11 @@ No build step — the module is plain ES modules loaded by Foundry directly.
 
 ## 3. Cross-repo contract (with `gmhub-app`)
 
-This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1` REST endpoints exposed under **Epic E — Public API & Foundry Foundations** in `gmhub-app` (shipped 2026-05-08).
+This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1` REST endpoints exposed under **Epic E — Public API & Foundry Foundations** in `gmhub-app` (shipped 2026-05-08). Despite the historical epic name, the API is **internal**: this module is its only sanctioned consumer (closed 2026-05-26 — see `gmhub-app/SCOPE.md` § Out of scope).
 
 - **`gmhub-app` owns the API surface.** Endpoint shapes, auth model, and token issuance all live there.
 - **This module owns its consumption side and its scope.** What we sync (content types, push/pull semantics, conflict policy) is documented in `SCOPE.md`.
+- **No public docs.** There is no OpenAPI spec endpoint, no Swagger UI, no developer quickstart. If you need a reference for a wire-format detail, look at `docs/SISTER_REPO.md` on the gmhub-app side.
 - **Wire format detail:**
   - `entity.summary`, `note.body`, `session_plan.gm_notes`, `session_plan.gm_secrets` are Tiptap ProseMirror-JSON. Pull renders to HTML via `tiptapToHtml` in `sync.js`. **Push sends HTML; `gmhub-app` normalizes HTML → Tiptap-JSON server-side on the `/api/v1` PATCH routes** (jsdom + `@tiptap/html.generateJSON`, shipped 2026-05-09 — closes GMV-6).
   - `session_plan.agenda` is opaque JSON server-side; canonical Scene shape `{ id, title, notes, entities: [{id, name, entityType}], estimated_duration_min, order, ticked }`.

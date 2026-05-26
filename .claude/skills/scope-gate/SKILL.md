@@ -10,10 +10,11 @@ CLAUDE.md §8: "Read SCOPE.md before agreeing to a feature. If a
 request would cross an out-of-scope line, surface that explicitly
 rather than implementing."
 
-This module's contract is unusually rigid because it consumes a
-public API owned by `gmhub-app`. Out-of-scope is not just product
-scope — it's also "this would be a `gmhub-app` change, not a module
-change."
+This module's contract is unusually rigid because it consumes an
+internal/first-party-only API owned by `gmhub-app` (closed 2026-05-26;
+this module is the only sanctioned consumer). Out-of-scope is not just
+product scope — it's also "this would be a `gmhub-app` change, not a
+module change."
 
 ## Steps
 

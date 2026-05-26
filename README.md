@@ -22,10 +22,12 @@ For the parent product's vision and shipped-feature log, see the [`gmhub-app` RE
 
 | Repo | Role |
 |---|---|
-| [**`gmhub-app`**](https://github.com/b34rblack-glitch/GMhub-app) | The web application this module syncs with. Owns the `/api/v1` REST surface (Epic E). Tracks this repo as **Epic G**. |
-| **`gmhub-vtt`** *(this repo)* | The Foundry module. |
+| [**`gmhub-app`**](https://github.com/b34rblack-glitch/GMhub-app) | The web application this module syncs with. Owns the internal `/api/v1` REST surface (Epic E). Tracks this repo as **Epic G**. |
+| **`gmhub-vtt`** *(this repo)* | The first-party Foundry module — the only sanctioned consumer of `/api/v1`. |
 
 For the cross-repo contract see [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md).
+
+> **First-party only.** The `gmhub-app` `/api/v1` surface is internal — alternative Foundry modules, mobile apps, CLI tools, or other clients built against `gmhub.app` are not permitted (see [`SCOPE.md`](SCOPE.md) § Out of scope and `gmhub-app/SCOPE.md` § Out of scope). This repo's source is shared so users can install and audit it; it is not a reference implementation for third-party clients.
 
 ---
 
@@ -84,7 +86,7 @@ In Foundry: **Game Settings → Configure Settings → Module Settings → GMhub
 
 ## API contract
 
-The module talks to the GMhub Public API tracked under **Epic E** in [`b34rblack-glitch/gmhub-app`](https://github.com/b34rblack-glitch/gmhub-app). The endpoint surface is **owned by that work** — not duplicated in this README — to keep one source of truth. See [`SCOPE.md`](./SCOPE.md) for the content types this module syncs and [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the cross-repo contract summary.
+The module talks to the GMhub **internal** API tracked under **Epic E** in [`b34rblack-glitch/gmhub-app`](https://github.com/b34rblack-glitch/gmhub-app). The endpoint surface is **owned by that work** — not duplicated in this README — to keep one source of truth. There is no public OpenAPI spec or developer documentation: the contract is internal cross-repo coordination only. See [`SCOPE.md`](./SCOPE.md) for the content types this module syncs and [`docs/SISTER_REPO.md`](docs/SISTER_REPO.md) for the cross-repo contract summary.
 
 ## Development
 
