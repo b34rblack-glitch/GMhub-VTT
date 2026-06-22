@@ -3,7 +3,8 @@
 > The web application this Foundry module syncs with.
 > Repo: https://github.com/b34rblack-glitch/GMhub-app
 > Tracked there as **Epic G — Foundry VTT Module** (currently planned).
-> Owns the `/api/v1` REST surface this module consumes (**Epic E — shipped 2026-05-08**).
+> Owns the **internal** `/api/v1` REST surface this module consumes (**Epic E — shipped 2026-05-08; first-party only 2026-05-26**).
+> This module is the only sanctioned consumer.
 
 ---
 
@@ -12,7 +13,7 @@
 `gmhub-app` is the GMhub web application — a TTRPG campaign-management product running at https://gmhub.app. It hosts:
 
 - The Postgres-backed canonical store of campaigns, sessions, entities, notes.
-- The `/api/v1` REST surface this module consumes (live spec at https://gmhub.app/docs).
+- The **internal** `/api/v1` REST surface this module consumes — first-party only (closed 2026-05-26; this module is its only sanctioned consumer).
 - The bearer-token issuance UI used for module configuration (`/account/api-tokens`).
 
 For its full vision and shipped-feature log, see that repo's `README.md` and `docs/EPICS.md`.
@@ -21,11 +22,11 @@ For its full vision and shipped-feature log, see that repo's `README.md` and `do
 
 ## Cross-repo contract
 
-The two projects are coupled through one thing only: the `/api/v1` REST surface, **owned by `gmhub-app`** under Epic E (shipped 2026-05-08).
+The two projects are coupled through one thing only: the `/api/v1` REST surface, **owned by `gmhub-app`** under Epic E (shipped 2026-05-08; locked down to first-party only 2026-05-26).
 
 ### Ownership
 
-- **`gmhub-app` owns the API surface.** Endpoint shapes, request/response payloads, auth model, and token issuance are all defined there. Live spec at https://gmhub.app/docs.
+- **`gmhub-app` owns the API surface.** Endpoint shapes, request/response payloads, auth model, and token issuance are all defined there. The contract is documented in `gmhub-app/docs/SISTER_REPO.md` for internal cross-repo coordination; there is no public OpenAPI spec or Swagger UI.
 - **`gmhub-vtt` (this repo) owns its consumption side and its scope.** What we sync (content types, push/pull semantics, conflict policy) is documented in [`../SCOPE.md`](../SCOPE.md). The wire format mirrors what Epic E exposes.
 
 ### Auth
