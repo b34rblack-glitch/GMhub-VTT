@@ -235,10 +235,11 @@ export class SetupWizardDialog extends Application {
         this.stepData.step1.validatedPrincipal = principal;
         this.dirty = true;
         ui.notifications.info(game.i18n.localize("GMHUB.Dialog.SetupWizard.Step1PingSuccess"));
-        this.render(false);
+        // Auto-advance to Step 2 on successful validation.
+        this.isBusy = false;
+        await this.goToStep(2);
       } catch (err) {
         // Error already toasted.
-      } finally {
         this.isBusy = false;
       }
     });
