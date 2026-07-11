@@ -466,7 +466,7 @@ function _ownershipDrifts(expected, actual) {
 // -----------------------------------------------------------------------------
 // True when a PULLED entity/notes page's live Foundry ownership diverges from
 // what its stored visibility flag implies. Scans ONLY pages carrying a
-// `flags.gmhub-vtt.visibility` flag — that flag is stamped at Pull time, so a
+// `flags.gmhub-vtt-bridge.visibility` flag — that flag is stamped at Pull time, so a
 // never-pulled / create-side / hand-made page has no server baseline and is
 // skipped (returning it would false-positive AND double-list it against the
 // create/update bucket). Recomputes the expected ownership via the shared
