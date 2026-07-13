@@ -25,7 +25,7 @@ When the user asks for an "audit" or "review", deliver findings inline in the co
 | Repo | `github.com/b34rblack-glitch/GMhub-VTT-Bridge` |
 | Sister repo | `github.com/b34rblack-glitch/GMhub-app` (web app; tracks this repo as Epic G; owns the `/api/v1` surface as Epic E) |
 | Module ID | `gmhub-vtt-bridge` |
-| Current version | `0.5.0` |
+| Current version | `0.6.0` |
 | Foundry compat | v11 minimum, v14 verified, v14 maximum |
 | System | `dnd5e` ≥ 3.0.0 |
 | Manifest URL | `https://github.com/b34rblack-glitch/GMhub-VTT-Bridge/releases/latest/download/module.json` |
@@ -81,7 +81,7 @@ This module is coupled to `gmhub-app` through exactly one surface: the `/api/v1`
 
 > **Update this section at the start of every new release.**
 
-`v0.5.0` closed **GMV-11**, a sync-path robustness pass — three hardening changes with no wire-format change (so `docs/SISTER_REPO.md` is untouched): (1) `GmhubClient._request` now auto-retries a 429 exactly once — parsing `retryAfter` from the JSON body, sleeping when `<= 60s`, throwing immediately when `> 60s` — instead of only surfacing a toast; (2) the session recap window is a GM-configurable `sessionRecapCount` world setting (default 1, byte-identical to the old single-recap behavior) threaded through `computeSessionWindow`; (3) the ~130-line `pullAll` is split into `_pullEntities`/`_pullNotes`/`_pullSessions`/`_cleanupOrphanSessions`, and orphan cleanup is now **skipped when the session-list fetch fails** so a transient error can no longer wipe the local session archive. This release also backfills a `v0.4.6` row (0016 unified visibility) in `docs/EPICS.md` — the version had jumped 0.4.4 → 0.4.6 with no 0.4.5. Next on deck (recommendation): **GMV-7** (AgendaEditor entity-link UI) or **GMV-5** (ApplicationV2 migration).
+`v0.6.0` closed **GMV-4**, the player-mapping resolver — a consumer-side UI pass with no wire-format change (so `docs/SISTER_REPO.md` is untouched): (1) `PlayerMapDialog` is extended in place to list every GMhub campaign player with a per-row status badge (`mapped` / `unmapped` / `stale` / `departed`, all computed in `getData()`), auto-suggest a Foundry user by *unique* case-insensitive `display_name`→`user.name` match (pre-selected only, never auto-persisted — an untouched Save is the GM's confirmation), and Clear a stale/departed mapping inline; the row set is the UNION of current players and departed `playerMap` keys, and a synthetic `<select>` option round-trips stale ids so an unrelated Save can't silently drop them; (2) the Pull-time `GMHUB.Warn.UnmappedRecipients` toast becomes a permanent, clickable `notifyClickable` toast that opens the resolver, bound cross-version (v13+ `Notification.element` / v11-12 `#notifications [data-id]`), excluding the close control and never throwing; (3) a latent setup-wizard bug is fixed — the dialog now honors `options.onSubmit` and an `options.campaignId` override so mid-wizard mapping flows into the saved config. AC3 ownership (`computePageOwnership`) is unchanged: resolved mappings apply on the *next* Pull, and the resolver's Save hint says so. Next on deck (recommendation): **GMV-7** (AgendaEditor entity-link UI) or **GMV-5** (ApplicationV2 migration).
 
 No active release branch.
 
@@ -90,7 +90,9 @@ No active release branch.
 | Priority | Issue | Notes |
 |---|---|---|
 | 🟡 Med | AgendaEditorDialog can't add/edit per-scene entity links | Existing scenes preserve `entities` on push; the editor has no UI to attach/detach links. Tracked as GMV-7. |
-| 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog + editors are V1; migration deferred to v0.5+. |
+| 🟡 Med | ApplicationV1 deprecation | ApplicationV1 still functional in v14 but officially deprecated. Sync dialog + editors (incl. the extended `PlayerMapDialog`) are V1; migration tracked as GMV-5, still deferred. |
+| 🟢 Low | Clickable-toast DOM binding is version-fragile | `notifyClickable` (`sync.js`) resolves the rendered notification `<li>` to attach its click handler. The v13+ `Notification.element` path is doc-confirmed and verified on v14; the v11/12 `#notifications [data-id]` fallback is best-effort and unverified. On any unrecognized DOM shape the toast degrades to non-clickable (never throws) — re-test the binding on every Foundry minor. |
+| 🟢 Low | Stale-mapping preservation leans on a synthetic `<select>` option | `PlayerMapDialog` renders a synthetic selected option carrying the raw id for stale / departed-stale rows so `_updateObject`'s from-scratch rebuild round-trips them. If that option is ever dropped from `player-map.hbs`, an unrelated Save silently drops those keys — keep the synthetic-option render whenever the union/departed rows change. |
 | 🟢 Low | Cross-campaign session journals can leak through Push | Switching campaigns leaves the old campaign's session journals in Foundry until the next Pull's orphan cleanup. |
 | 🟢 Low | Eye toggle is buffered, not immediate | Per `SCOPE.md` "Manual sync only." Eye click maps to `flags.gmhub-vtt-bridge.visibility` and waits for the next Push. |
 | 🟢 Low | i18n shim depends on Foundry's internal `_loc()` reading from `game.i18n.translations` | v0.4.3 mutates `translations` directly; the JS-level localize/format patches handle direct callers. If a future Foundry release moves `_loc()` to a different store, re-test on every Foundry minor. |
