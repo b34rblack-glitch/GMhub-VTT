@@ -68,14 +68,20 @@
           {{!-- Per-row control column. CSS makes this span both rows
                of the grid so the buttons stack vertically. --}}
           <div class="gmhub-agenda-controls">
-            <button type="button" data-action="up" data-idx="{{this._idx}}" title="Move up" {{#if ../pending}}disabled{{/if}}>
-              <i class="fas fa-arrow-up"></i>
+            <button type="button" data-action="up" data-idx="{{this._idx}}"
+              aria-label="{{localize "GMHUB.Dialog.AgendaEditor.MoveUp"}}"
+              title="{{localize "GMHUB.Dialog.AgendaEditor.MoveUp"}}" {{#if ../pending}}disabled{{/if}}>
+              <i class="fas fa-arrow-up" aria-hidden="true"></i>
             </button>
-            <button type="button" data-action="down" data-idx="{{this._idx}}" title="Move down" {{#if ../pending}}disabled{{/if}}>
-              <i class="fas fa-arrow-down"></i>
+            <button type="button" data-action="down" data-idx="{{this._idx}}"
+              aria-label="{{localize "GMHUB.Dialog.AgendaEditor.MoveDown"}}"
+              title="{{localize "GMHUB.Dialog.AgendaEditor.MoveDown"}}" {{#if ../pending}}disabled{{/if}}>
+              <i class="fas fa-arrow-down" aria-hidden="true"></i>
             </button>
-            <button type="button" data-action="remove" data-idx="{{this._idx}}" title="Remove" {{#if ../pending}}disabled{{/if}}>
-              <i class="fas fa-trash"></i>
+            <button type="button" data-action="remove" data-idx="{{this._idx}}"
+              aria-label="{{localize "GMHUB.Dialog.AgendaEditor.Remove"}}"
+              title="{{localize "GMHUB.Dialog.AgendaEditor.Remove"}}" {{#if ../pending}}disabled{{/if}}>
+              <i class="fas fa-trash" aria-hidden="true"></i>
             </button>
           </div>
         </li>
