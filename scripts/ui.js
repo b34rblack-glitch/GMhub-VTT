@@ -34,6 +34,7 @@ import { describePingFailure, describePingResult, safeCall } from "./error-toast
 // Shared helpers from sync.js for the editor + visibility dialogs.
 import {
   computePageOwnership,
+  listPulledEntities,
   renderAgendaHtml,
   renderPinnedHtml,
   SESSION_PLAN_FLAGS,
@@ -448,23 +449,48 @@ export class AgendaEditorDialog extends Application {
     return game.i18n.localize(titleKey);
   }
   getData() {
-    return {
+    const base = {
       kind: this.kind,
       // Flatten the kind switch into two booleans the template can
       // {{#if isAgenda}} on directly.
       isAgenda: this.kind === "agenda",
       isPinned: this.kind === "pinned",
       // Disables save/cancel/add/row buttons while a Save is in flight.
-      pending: this.pending,
-      // Inject the row index so per-row buttons can find their item again.
-      items: this.items.map((item, idx) => ({ ...item, _idx: idx }))
+      pending: this.pending
     };
+    if (this.kind === "agenda") {
+      // GMV-7: entity-link picker source. `listPulledEntities()` groups the
+      // already-pulled entities by kind; per-scene we subtract the ones
+      // already attached so the Add-entity select only offers new links.
+      const groups = listPulledEntities();
+      // Distinguishes "nothing pulled yet" (empty-state) from "this scene
+      // already links everything pulled" (just the placeholder, no option).
+      base.anyPulled = groups.length > 0;
+      base.items = this.items.map((item, idx) => {
+        const entities = Array.isArray(item.entities) ? item.entities : [];
+        const attached = new Set(entities.map((e) => e?.id));
+        const availableGroups = groups
+          .map((g) => ({
+            kind: g.kind,
+            label: g.label,
+            entities: g.entities.filter((e) => !attached.has(e.id))
+          }))
+          .filter((g) => g.entities.length);
+        return { ...item, entities, _idx: idx, availableGroups };
+      });
+    } else {
+      // Pinned mode: inject the row index so per-row buttons find their item.
+      base.items = this.items.map((item, idx) => ({ ...item, _idx: idx }));
+    }
+    return base;
   }
   activateListeners(html) {
     super.activateListeners(html);
     // Add row — push a per-kind empty record onto the array, redraw.
     html.find('[data-action="add"]').on("click", () => {
-      if (this.kind === "agenda") this.items.push({ title: "", estimated_duration_min: 0, notes: "" });
+      // Seed `entities: []` on a new scene so the entity-link picker can
+      // attach to a just-added row without a null-guard dance.
+      if (this.kind === "agenda") this.items.push({ title: "", estimated_duration_min: 0, notes: "", entities: [] });
       else this.items.push({ entity_type: "npc", name: "", entity_id: "" });
       this.render(false);
     });
@@ -501,6 +527,40 @@ export class AgendaEditorDialog extends Application {
       // Numeric field — coerce on input. Everything else stays string.
       if (field === "estimated_duration_min") item[field] = Number(value) || 0;
       else item[field] = value;
+    });
+    // GMV-7: attach an entity link to a scene (agenda mode). Structural
+    // change → re-render (which also resets the select to its placeholder).
+    // Safe because [data-field] writes live on input, so sibling
+    // title/notes text is already committed before this redraw.
+    html.find('[data-action="add-entity"]').on("change", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      if (!Number.isInteger(idx)) return;
+      const item = this.items[idx]; if (!item) return;
+      const id = evt.currentTarget.value;
+      const opt = evt.currentTarget.selectedOptions?.[0];
+      // Placeholder / disabled empty-state option → no-op.
+      if (!id || !opt) return;
+      // Map the neutral picker source into the canonical camelCase scene
+      // shape (`entityType`, NOT the pinned snake `entity_type`).
+      const name = opt.dataset.name ?? "";
+      const entityType = opt.dataset.kind ?? "";
+      // Lazily create the array (older scenes may predate `entities`).
+      if (!Array.isArray(item.entities)) item.entities = [];
+      // Dedupe — the same entity can't be attached twice to one scene.
+      if (!item.entities.some((e) => e?.id === id)) {
+        item.entities.push({ id, name, entityType });
+      }
+      this.render(false);
+    });
+    // GMV-7: detach an entity link chip from a scene.
+    html.find('[data-action="remove-entity"]').on("click", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      const entityId = evt.currentTarget.dataset.entityId;
+      if (!Number.isInteger(idx) || !entityId) return;
+      const item = this.items[idx];
+      if (!item || !Array.isArray(item.entities)) return;
+      item.entities = item.entities.filter((e) => e?.id !== entityId);
+      this.render(false);
     });
     html.find('[data-action="cancel"]').on("click", () => this.close());
     // Save: persist the raw array to the flag, re-render the display

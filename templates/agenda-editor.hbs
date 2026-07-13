@@ -42,6 +42,38 @@
               rows="2"
               data-idx="{{this._idx}}" data-field="notes"
               placeholder="{{localize "GMHUB.Dialog.AgendaEditor.NotesPlaceholder"}}">{{this.notes}}</textarea>
+            {{!-- GMV-7: per-scene entity-link picker. Existing links render
+                 as removable chips; the Add-entity <select> lists pulled
+                 entities grouped by kind, minus those already attached.
+                 Pickers use data-action (never data-field) so the generic
+                 [data-field] input handler doesn't catch them. --}}
+            <div class="gmhub-agenda-entities">
+              {{#each this.entities}}
+                <span class="gmhub-agenda-entity-chip">{{this.name}}<button
+                    type="button" data-action="remove-entity"
+                    data-idx="{{../_idx}}" data-entity-id="{{this.id}}"
+                    aria-label="{{localize "GMHUB.Dialog.AgendaEditor.RemoveEntity"}}"
+                    title="{{localize "GMHUB.Dialog.AgendaEditor.RemoveEntity"}}"
+                    {{#if ../../pending}}disabled{{/if}}><i class="fas fa-times" aria-hidden="true"></i></button></span>
+              {{/each}}
+              <select class="gmhub-agenda-entity-add" data-action="add-entity"
+                data-idx="{{this._idx}}" {{#if ../pending}}disabled{{/if}}>
+                <option value="">{{localize "GMHUB.Dialog.AgendaEditor.EntityPlaceholder"}}</option>
+                {{#if this.availableGroups.length}}
+                  {{#each this.availableGroups}}
+                    <optgroup label="{{this.label}}">
+                      {{#each this.entities}}
+                        <option value="{{this.id}}" data-name="{{this.name}}" data-kind="{{../kind}}">{{this.name}}</option>
+                      {{/each}}
+                    </optgroup>
+                  {{/each}}
+                {{else}}
+                  {{#unless ../anyPulled}}
+                    <option value="" disabled>{{localize "GMHUB.Dialog.AgendaEditor.NoEntitiesPulled"}}</option>
+                  {{/unless}}
+                {{/if}}
+              </select>
+            </div>
           {{else}}
             {{!-- Pinned row: entity_type (one of the six kinds),
                  display name, GMhub entity_id. The {{eq}} helper is
