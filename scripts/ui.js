@@ -35,6 +35,7 @@ import { describePingFailure, describePingResult, safeCall } from "./error-toast
 // Shared helpers from sync.js for the editor + visibility dialogs.
 import {
   computePageOwnership,
+  listPulledEntities,
   renderAgendaHtml,
   renderPinnedHtml,
   SESSION_PLAN_FLAGS,
@@ -455,6 +456,9 @@ export class AgendaEditorDialog extends Application {
   constructor({ page, kind } = {}, options = {}) {
     super(options);
     this.page = page; this.kind = kind;
+    // Saving-in-progress guard so a double-click can't fire two
+    // overlapping setFlag/update sequences (mirrors VisibilityDialog).
+    this.pending = false;
     // Look up the right flag key (`agendaItems` or `pinnedRefs`) so
     // both modes can use the same load/save path.
     const flagKey = SESSION_PLAN_FLAGS[kind];
@@ -478,21 +482,71 @@ export class AgendaEditorDialog extends Application {
     return game.i18n.localize(titleKey);
   }
   getData() {
-    return {
+    const base = {
       kind: this.kind,
       // Flatten the kind switch into two booleans the template can
       // {{#if isAgenda}} on directly.
       isAgenda: this.kind === "agenda",
       isPinned: this.kind === "pinned",
-      // Inject the row index so per-row buttons can find their item again.
-      items: this.items.map((item, idx) => ({ ...item, _idx: idx }))
+      // Disables save/cancel/add/row buttons while a Save is in flight.
+      pending: this.pending
     };
+    if (this.kind === "agenda") {
+      // GMV-7: entity-link picker source. `listPulledEntities()` groups the
+      // already-pulled entities by kind; per-scene we subtract the ones
+      // already attached so the Add-entity select only offers new links.
+      const groups = listPulledEntities();
+      // Distinguishes "nothing pulled yet" (empty-state) from "this scene
+      // already links everything pulled" (just the placeholder, no option).
+      base.anyPulled = groups.length > 0;
+      base.items = this.items.map((item, idx) => {
+        const entities = Array.isArray(item.entities) ? item.entities : [];
+        const attached = new Set(entities.map((e) => e?.id));
+        const availableGroups = groups
+          .map((g) => ({
+            kind: g.kind,
+            label: g.label,
+            entities: g.entities.filter((e) => !attached.has(e.id))
+          }))
+          .filter((g) => g.entities.length);
+        return { ...item, entities, _idx: idx, availableGroups };
+      });
+    } else {
+      // Pinned mode: single-select entity picker (upgrade from the old
+      // free-text entity_id box). Same pulled-entity source as agenda, but
+      // one entity per row instead of a multi-chip set.
+      const groups = listPulledEntities();
+      base.anyPulled = groups.length > 0;
+      // Flat id set so we can detect a stored entity_id that isn't pulled.
+      const pulledIds = new Set(groups.flatMap((g) => g.entities.map((e) => e.id)));
+      base.items = this.items.map((item, idx) => {
+        const currentId = item.entity_id ?? "";
+        // Mark the matching option selected so the picker reflects the pin's
+        // stored id on open.
+        const pickGroups = groups.map((g) => ({
+          kind: g.kind,
+          label: g.label,
+          entities: g.entities.map((e) => ({ ...e, selected: e.id === currentId }))
+        }));
+        // A stored id absent from the pulled list (never pulled / different
+        // campaign) gets a synthetic selected fallback option so opening or
+        // touching the select can't clobber the existing link.
+        const notPulled = !!currentId && !pulledIds.has(currentId);
+        const notPulledLabel = notPulled
+          ? game.i18n.format("GMHUB.Dialog.AgendaEditor.EntityNotPulled", { name: item.name ?? "" })
+          : "";
+        return { ...item, _idx: idx, currentId, pickGroups, notPulled, notPulledLabel };
+      });
+    }
+    return base;
   }
   activateListeners(html) {
     super.activateListeners(html);
     // Add row — push a per-kind empty record onto the array, redraw.
     html.find('[data-action="add"]').on("click", () => {
-      if (this.kind === "agenda") this.items.push({ title: "", estimated_duration_min: 0, notes: "" });
+      // Seed `entities: []` on a new scene so the entity-link picker can
+      // attach to a just-added row without a null-guard dance.
+      if (this.kind === "agenda") this.items.push({ title: "", estimated_duration_min: 0, notes: "", entities: [] });
       else this.items.push({ entity_type: "npc", name: "", entity_id: "" });
       this.render(false);
     });
@@ -530,10 +584,66 @@ export class AgendaEditorDialog extends Application {
       if (field === "estimated_duration_min") item[field] = Number(value) || 0;
       else item[field] = value;
     });
+    // GMV-7: attach an entity link to a scene (agenda mode). Structural
+    // change → re-render (which also resets the select to its placeholder).
+    // Safe because [data-field] writes live on input, so sibling
+    // title/notes text is already committed before this redraw.
+    html.find('[data-action="add-entity"]').on("change", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      if (!Number.isInteger(idx)) return;
+      const item = this.items[idx]; if (!item) return;
+      const id = evt.currentTarget.value;
+      const opt = evt.currentTarget.selectedOptions?.[0];
+      // Placeholder / disabled empty-state option → no-op.
+      if (!id || !opt) return;
+      // Map the neutral picker source into the canonical camelCase scene
+      // shape (`entityType`, NOT the pinned snake `entity_type`).
+      const name = opt.dataset.name ?? "";
+      const entityType = opt.dataset.kind ?? "";
+      // Lazily create the array (older scenes may predate `entities`).
+      if (!Array.isArray(item.entities)) item.entities = [];
+      // Dedupe — the same entity can't be attached twice to one scene.
+      if (!item.entities.some((e) => e?.id === id)) {
+        item.entities.push({ id, name, entityType });
+      }
+      this.render(false);
+    });
+    // GMV-7: detach an entity link chip from a scene.
+    html.find('[data-action="remove-entity"]').on("click", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      const entityId = evt.currentTarget.dataset.entityId;
+      if (!Number.isInteger(idx) || !entityId) return;
+      const item = this.items[idx];
+      if (!item || !Array.isArray(item.entities)) return;
+      item.entities = item.entities.filter((e) => e?.id !== entityId);
+      this.render(false);
+    });
+    // GMV-7: pinned single-select entity picker. Writes the SNAKE shape
+    // (entity_id/name/entity_type — pinnedHtml reads pin.entity_id/
+    // entity_type/name), mutating ONLY those three fields so a pin's
+    // position/staged_at/pin_reason survive untouched.
+    html.find('[data-action="pinned-pick"]').on("change", (evt) => {
+      const idx = Number(evt.currentTarget.dataset.idx);
+      if (!Number.isInteger(idx)) return;
+      const item = this.items[idx]; if (!item) return;
+      const id = evt.currentTarget.value;
+      const opt = evt.currentTarget.selectedOptions?.[0];
+      // Placeholder / disabled empty-state option → no-op (can't blank a pin
+      // via the picker; that matches "picking an entity sets the fields").
+      if (!id || !opt) return;
+      item.entity_id = id;
+      item.name = opt.dataset.name ?? "";
+      item.entity_type = opt.dataset.kind ?? "";
+      this.render(false);
+    });
     html.find('[data-action="cancel"]').on("click", () => this.close());
     // Save: persist the raw array to the flag, re-render the display
     // HTML, mark dirty (so the next Push includes the change), close.
     html.find('[data-action="save"]').on("click", async () => {
+      // Re-entrancy guard so a double-click doesn't fire two overlapping
+      // setFlag/update sequences.
+      if (this.pending) return;
+      this.pending = true; this.render(false);
       try {
         const flagKey = SESSION_PLAN_FLAGS[this.kind];
         // Strip the row-index helper before persisting.
@@ -545,6 +655,8 @@ export class AgendaEditorDialog extends Application {
         ui.notifications.info(game.i18n.localize("GMHUB.Notify.AgendaSaved"));
         this.close();
       } catch (err) {
+        // Reset the busy flag so the Save button comes back to life.
+        this.pending = false; this.render(false);
         ui.notifications.error(err.message ?? String(err));
       }
     });
